@@ -1,11 +1,245 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tela Inicial</title>
+    <title>Depósito Nascimento - Materiais de Construção</title>
     <link rel="stylesheet" href="stleys.css">
+    <!-- FontAwesome para Ícones -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
 <body>
     
+    <!-- Cabeçalho -->
+    <header class="header">
+        <div class="container header-container">
+            <div class="logo">
+                <i class="fa-solid fa-hard-hat"></i>
+                <span>Depósito <strong>Nascimento</strong></span>
+            </div>
+            
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="O que você precisa para sua obra? (ex: cimento, tinta...)">
+                <i class="fa-solid fa-magnifying-glass"></i>
+            </div>
+
+            <div class="header-actions">
+                <button id="cartBtn" class="cart-btn">
+                    <i class="fa-solid fa-cart-shopping"></i>
+                    <span>Carrinho</span>
+                    <span id="cartCount" class="cart-badge">0</span>
+                </button>
+            <button id="accountBtn" class="account-btn">
+        <i class="fa-solid fa-user"></i> Minha Conta
+        </button>
+    </div>
+
+                
+            </div>
+        </div>
+    </header>
+
+    <!-- Menu de Categorias -->
+    <nav class="categories-nav">
+        <div class="container categories-list">
+            <button class="cat-btn active" data-category="todos">Todos os Produtos</button>
+            <button class="cat-btn" data-category="ferramentas">Ferramentas</button>
+            <button class="cat-btn" data-category="eletrica">Elétrica</button>
+            <button class="cat-btn" data-category="hidraulica">Hidráulica</button>
+            <button class="cat-btn" data-category="pisos">Pisos e Revestimentos</button>
+            <button class="cat-btn" data-category="tintas">Tintas e Impermeabilizantes</button>
+        </div>
+    </nav>
+
+    <!-- NOVA DIV DE INTRODUÇÃO À LOJA -->
+    <section class="hero-section">
+        <div class="container hero-content">
+            <div class="hero-text">
+                <h1>Tudo para sua Obra, do Alicerce ao Acabamento!</h1>
+                <p>Encontre os melhores materiais de construção, ferramentas e acabamentos com entrega rápida e os melhores preços do mercado.</p>
+                <div class="hero-features">
+                    <span><i class="fa-solid fa-truck-fast"></i> Entrega Rápida</span>
+                    <span><i class="fa-solid fa-shield-halved"></i> Produtos Certificados</span>
+                    <span><i class="fa-solid fa-headset"></i> Atendimento Especializado</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Conteúdo Principal -->
+    <main class="container main-content">
+        <!-- Catálogo de Produtos -->
+        <section class="catalog-section">
+            <div class="section-title">
+                <h2>Catálogo de Materiais</h2>
+                <p>Os melhores produtos com entrega rápida para a sua construção.</p>
+            </div>
+            
+            <div id="productGrid" class="product-grid">
+                <!-- Os produtos serão injetados via JavaScript -->
+            </div>
+        </section>
+    </main>
+
+
+    <!-- SEÇÃO: COMO SURGIU O DEPÓSITO -->
+    <section class="about-section">
+        <div class="container about-container">
+            <div class="about-text-content">
+                <span class="about-badge"><i class="fa-solid fa-award"></i> Nossa História</span>
+                <h2>Construindo Sonhos e Histórias de Geração em Geração</h2>
+                <p>
+                    Fundada com a missão de ser mais do que um simples depósito, o <strong>Depósito Nascimento</strong> nasceu da paixão pela construção civil e do compromisso genuíno com cada cliente que decide erguer o seu próprio sonho. 
+                </p>
+                <p>
+                    O que começou como uma pequena revenda de cimento e materiais básicos no coração da cidade, expandiu-se graças à confiança conquistada obra por obra. Hoje, oferecemos um mix completo que vai desde o alicerce mais robusto até o mais refinado acabamento, unindo atendimento especializado, preços justos e a agilidade que a sua obra precisa.
+                </p>
+                
+                <div class="about-stats">
+                    <div class="stat-box">
+                        <strong>+12</strong>
+                        <span>Anos de Tradição</span>
+                    </div>
+                    <div class="stat-box">
+                        <strong>+10k</strong>
+                        <span>Obras Atendidas</span>
+                    </div>
+                    <div class="stat-box">
+                        <strong>100%</strong>
+                        <span>Compromisso</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="about-image-card">
+                <div class="about-card-badge">
+                    <i class="fa-solid fa-store"></i>
+                    <span>Sede Própria e Estoque Completo</span>
+                </div>
+                <p class="about-quote">
+                    "Mais do que vender materiais, nós fornecemos a base sólida para o futuro dos nossos clientes."
+                </p>
+                <div class="about-signature">
+                    <strong>Equipe Depósito Nascimento</strong>
+                    <span>Tradição e Qualidade</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SEÇÃO: FAQ (PERGUNTAS FREQUENTES) -->
+    <section class="faq-section">
+        <div class="container faq-container">
+            <div class="faq-header">
+                <span class="faq-badge"><i class="fa-solid fa-circle-question"></i> Dúvidas Comuns</span>
+                <h2>Perguntas Frequentes</h2>
+                <p>Tire suas dúvidas sobre prazos, entregas, formas de pagamento e políticas da nossa loja.</p>
+            </div>
+
+            <div class="faq-accordion">
+                <div class="faq-item" onclick="toggleFaq(this)">
+                    <div class="faq-question">
+                        <span>Vocês realizam entregas em domicílio?</span>
+                        <i class="fa-solid fa-chevron-down"></i>
+                    </div>
+                    <div class="faq-answer">
+                        <p>Sim! Entregamos em toda a região de Cidade Tiradentes e arredores. O prazo e a taxa de frete podem variar de acordo com a distância e o volume dos materiais.</p>
+                    </div>
+                </div>
+
+                <div class="faq-item" onclick="toggleFaq(this)">
+                    <div class="faq-question">
+                        <span>Quais são as formas de pagamento aceitas?</span>
+                        <i class="fa-solid fa-chevron-down"></i>
+                    </div>
+                    <div class="faq-answer">
+                        <p>Aceitamos dinheiro, PIX, cartões de crédito e débito (com facilidades de parcelamento para compras maiores). Também trabalhamos com faturamento para construtoras e profissionais da área mediante cadastro prévio.</p>
+                    </div>
+                </div>
+
+                <div class="faq-item" onclick="toggleFaq(this)">
+                    <div class="faq-question">
+                        <span>Posso devolver ou trocar materiais que sobraram da obra?</span>
+                        <i class="fa-solid fa-chevron-down"></i>
+                    </div>
+                    <div class="faq-answer">
+                        <p>Sim, aceitamos a troca de produtos fechados, sem avarias e em suas embalagens originais no prazo de até 7 dias corridos após a compra, mediante apresentação da nota fiscal.</p>
+                    </div>
+                </div>
+
+                <div class="faq-item" onclick="toggleFaq(this)">
+                    <div class="faq-question">
+                        <span>Vocês fazem orçamento de lista de materiais completa?</span>
+                        <i class="fa-solid fa-chevron-down"></i>
+                    </div>
+                    <div class="faq-answer">
+                        <p>Com certeza! Você pode trazer a sua lista de materiais física ou enviar uma foto dela diretamente para o nosso atendimento. Montamos o orçamento completo com os melhores preços para ajudar na sua economia.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+
+    <!-- Carrinho (Drawer Lateral) -->
+    <div id="cartDrawer" class="cart-drawer">
+        <div class="cart-header">
+            <h3><i class="fa-solid fa-cart-shopping"></i> Seu Carrinho</h3>
+            <button id="closeCart" class="close-btn">&times;</button>
+        </div>
+        <div id="cartItems" class="cart-items">
+            <!-- Itens adicionados aparecem aqui -->
+            <p class="empty-cart-msg">Seu carrinho está vazio.</p>
+        </div>
+        <div class="cart-footer">
+            <div class="cart-total">
+                <span>Total:</span>
+                <strong id="cartTotalPrice">R$ 0,00</strong>
+            </div>
+            <button id="checkoutBtn" class="btn-checkout" disabled>Finalizar Pedido</button>
+        </div>
+    </div>
+    <div id="cartOverlay" class="cart-overlay"></div>
+
+    <!-- Modal de Sucesso -->
+    <div id="successModal" class="modal">
+        <div class="modal-content">
+            <i class="fa-solid fa-circle-check"></i>
+            <h2>Pedido Realizado com Sucesso!</h2>
+            <p>Agradecemos sua preferência. Separaremos seus materiais imediatamente.</p>
+            <button id="closeModalBtn" class="btn-primary">Continuar Comprando</button>
+        </div>
+    </div>
+
+
+    
+
+    <!-- Rodapé -->
+    <footer class="footer">
+        <div class="container footer-content">
+            <div class="footer-col">
+                <div class="logo">
+                    <i class="fa-solid fa-hard-hat"></i>
+                    <span>Depósito <strong>Nascimento</strong></span>
+                </div>
+                <p>Seu parceiro completo do alicerce ao acabamento.</p>
+            </div>
+            <div class="footer-col">
+                <h4>Contato</h4>
+                <p><i class="fa-solid fa-phone"></i> (11) 2558-5451</p>
+                <p><i class="fa-solid fa-envelope"></i> depósito123@nascimento.com.br</p>
+            <div class="footer-col">
+                <h4>Horário de Funcionamento</h4>
+                <p>Segunda a Sexta: 07:30 - 18:00</p>
+                <p>Sábado: 08:00 - 19:00</p>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2026 Depósito Nascimento Materiais de Construção. Todos os direitos reservados.</p>
+        </div>
+    </footer>
+
+    
+    <script src="script.js"></script>
 </body>
 </html>
