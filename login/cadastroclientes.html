@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DEPÓSITO NASCIMENTO - Criar Conta</title>
+    <!-- Ligação com o CSS separado -->
+    <link rel="stylesheet" href="cadastro.css">
+</head>
+<body>
+
+    <div class="cadastro-container">
+        <div class="cadastro-card">
+            <!-- Cabeçalho / Título Principal -->
+            <div class="header-box">
+                <h2>DEPÓSITO NASCIMENTO:</h2>
+                <p>Crie a sua conta para começar as compras</p>
+            </div>
+
+            <!-- Formulário de Registo -->
+            <form action="#" method="POST" class="form-group">
+                
+                <div class="form-content">
+                    <label for="nome">Nome Completo:</label>
+                    <input type="text" id="nome" name="nome" placeholder="Digite o seu nome completo" required>
+                </div>
+
+                <div class="form-content">
+                    <label for="email">E-mail:</label>
+                    <input type="email" id="email" name="email" placeholder="seu.email@exemplo.com" required>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-content">
+                        <label for="telefone">Telefone / WhatsApp:</label>
+                        <input type="tel" id="telefone" name="telefone" placeholder="(00) 00000-0000" required>
+                    </div>
+
+                    <div class="form-content">
+                        <label for="cpf">CPF / CNPJ:</label>
+                        <input type="text" id="cpf" name="cpf" placeholder="000.000.000-00" required>
+                    </div>
+                </div>
+
+                <div class="form-content">
+                    <label for="senha">Senha:</label>
+                    <input type="password" id="senha" name="senha" placeholder="Crie uma senha segura" required>
+                </div>
+
+                <!-- Botão de Ação -->
+                <div class="btn-container">
+                    <button type="submit" class="btn-cadastrar">Registrar Conta</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</body>
+</html>

@@ -1,0 +1,144 @@
+/* Configuração Global e Fundo Degradê Elegante */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    background: linear-gradient(135deg, #10b981 0%, #1e3a8a 100%);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+/* Contentor do Card */
+.cadastro-container {
+    width: 100%;
+    max-width: 480px;
+}
+
+.cadastro-card {
+    background: #ffffff;
+    padding: 40px 30px;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+/* Cabeçalho do Card */
+.header-box {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.header-box h2 {
+    color: #1e3a8a;
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+}
+
+.header-box p {
+    color: #64748b;
+    font-size: 14px;
+}
+
+/* Estrutura do Formulário */
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.form-content {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.form-row {
+    display: flex;
+    gap: 12px;
+}
+
+.form-row .form-content {
+    flex: 1;
+}
+
+label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #334155;
+}
+
+input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 14px;
+    color: #1e293b;
+    transition: all 0.3s ease;
+    background-color: #f8fafc;
+}
+
+input:focus {
+    outline: none;
+    border-color: #1e3a8a;
+    background-color: #ffffff;
+    box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.15);
+}
+
+/* Botão de Envio */
+.btn-container {
+    margin-top: 10px;
+}
+
+.btn-cadastrar {
+    width: 100%;
+    background-color: #1e3a8a;
+    color: #ffffff;
+    padding: 13px;
+    border: none;
+    border-radius: 6px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.1s ease;
+    box-shadow: 0 4px 6px rgba(30, 58, 138, 0.2);
+}
+
+.btn-cadastrar:hover {
+    background-color: #1d4ed8;
+}
+
+.btn-cadastrar:active {
+    transform: scale(0.98);
+}
+
+/* Rodapé com link para voltar ao login */
+.login-link {
+    text-align: center;
+    margin-top: 20px;
+}
+
+.login-link p {
+    font-size: 13px;
+    color: #64748b;
+}
+
+.login-link a {
+    color: #1e3a8a;
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.2s ease;
+}
+
+.login-link a:hover {
+    text-decoration: underline;
+    color: #1d4ed8;
+}
