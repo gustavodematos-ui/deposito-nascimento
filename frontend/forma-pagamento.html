@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Depósito Nascimento - Formas de Pagamento</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-title">Depósito Nascimento</div>
+    <span class="logo-sub">BD</span>
+  </div>
+  
+  <nav class="sidebar-nav">
+    <div class="nav-header">Navegação</div>
+    
+    <a href="produtos.html" class="nav-item">
+      Produtos
+    </a>
+    <a href="index.html" class="nav-item">
+      Pedidos
+    </a>
+    <a href="estoque.html" class="nav-item">
+      Estoque
+    </a>
+    <a href="forma-pagamento.html" class="nav-item active">
+      Forma de Pagamento
+    </a>
+    <a href="reposicao.html" class="nav-item">
+      Reposição
+    </a>
+  </nav>
+
+  <div class="sidebar-user">
+    <div class="user-role">Administrador</div>
+  </div>
+</aside>
+
+<main class="main">
+  <div class="page-header">
+    <div class="page-header-left">
+      <h1>Formas de Pagamento</h1>
+      <p>Gerencie as modalidades de pagamento aceitas no depósito</p>
+    </div>
+    <button class="btn-primary">+ Nova Forma de Pagamento</button>
+  </div>
+
+  <div class="section-card">
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>Método</th>
+            <th>Taxa de Operação</th>
+            <th>Prazo de Liberação</th>
+            <th>Status</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="td-bold">PIX (À Vista)</td>
+            <td>0,00%</td>
+            <td>Imediato</td>
+            <td><span class="badge badge-green">Ativo</span></td>
+            <td>
+              <button class="btn-primary btn-sm">Configurar</button>
+            </td>
+          </tr>
+          <tr>
+            <td class="td-bold">Cartão de Crédito (Até 12x)</td>
+            <td>2,50%</td>
+            <td>30 dias (ou antecipado)</td>
+            <td><span class="badge badge-green">Ativo</span></td>
+            <td>
+              <button class="btn-primary btn-sm">Configurar</button>
+            </td>
+          </tr>
+          <tr>
+            <td class="td-bold">Boleto Bancário</td>
+            <td>R$ 1,50 / emissão</td>
+            <td>1 a 2 dias úteis</td>
+            <td><span class="badge badge-green">Ativo</span></td>
+            <td>
+              <button class="btn-primary btn-sm">Configurar</button>
+            </td>
+          </tr>
+          <tr>
+            <td class="td-bold">Faturamento PJ (Faturado)</td>
+            <td>1,00%</td>
+            <td>28 dias</td>
+            <td><span class="badge badge-yellow">Em Análise</span></td>
+            <td>
+              <button class="btn-primary btn-sm">Configurar</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<script src="../backend/src/app.js"></script>
+</body>
+</html>

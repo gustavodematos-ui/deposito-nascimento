@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Depósito Nascimento - Minhas Compras</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-title">Depósito Nascimento</div>
+    <span class="logo-sub">BD</span>
+  </div>
+
+  <nav class="sidebar-nav">
+    <div class="nav-header nav-header-user">Navegação</div>
+
+    <a href="catalogo.html" class="nav-item">
+      Catálogo
+    </a>
+    <a href="carrinho.html" class="nav-item">
+      Carrinho
+    </a>
+    <a href="meus-pedidos.html" class="nav-item">
+      Meus pedidos
+    </a>
+    <a href="minhas-compras.html" class="nav-item active">
+      Minhas Compras
+    </a>
+    <a href="contato.html" class="nav-item mt-auto">
+      Contato
+    </a>
+  </nav>
+
+  <div class="sidebar-user">
+    <div class="user-role user-role-highlight">Usuário</div>
+  </div>
+</aside>
+
+<main class="main">
+  <div class="order-card">
+    <div class="order-header">
+      <h2>COMPRA 01</h2>
+      <span class="order-date">--data--</span>
+    </div>
+
+    <div class="order-details">
+      <div>--produtos--</div>
+      <div>--subtotal--</div>
+      <div>--Status--</div>
+      <div>--Forma de pagamento--</div>
+    </div>
+
+    <button class="btn-details">Ver detalhes</button>
+  </div>
+</main>
+
+<script src="../backend/src/app.js"></script>
+</body>
+</html>
