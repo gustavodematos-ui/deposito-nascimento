@@ -1,0 +1,42 @@
+[
+    {
+        "id": 1,
+        "nome": "PIX",
+        "descricao": "Aprovação imediata, com desconto à vista.",
+        "desconto": 5,
+        "parcelas": 1,
+        "ativo": true
+    },
+    {
+        "id": 2,
+        "nome": "Cartão de crédito",
+        "descricao": "Parcelamento em até 6x.",
+        "desconto": 0,
+        "parcelas": 6,
+        "ativo": true
+    },
+    {
+        "id": 3,
+        "nome": "Cartão de débito",
+        "descricao": "Débito na entrega ou na retirada.",
+        "desconto": 0,
+        "parcelas": 1,
+        "ativo": true
+    },
+    {
+        "id": 4,
+        "nome": "Boleto bancário",
+        "descricao": "Compensação em até 2 dias úteis.",
+        "desconto": 0,
+        "parcelas": 1,
+        "ativo": true
+    },
+    {
+        "id": 5,
+        "nome": "Dinheiro na entrega",
+        "descricao": "Pague ao receber os materiais.",
+        "desconto": 0,
+        "parcelas": 1,
+        "ativo": false
+    }
+]

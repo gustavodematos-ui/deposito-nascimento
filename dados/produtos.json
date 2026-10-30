@@ -1,0 +1,90 @@
+[
+    {
+        "id": 1,
+        "categoria": "Cimento e Argamassa",
+        "nome": "Cimento CP II 50kg",
+        "descricao": "Saco de 50 kg, ideal para fundações, lajes e reboco.",
+        "estoque": 120,
+        "minimo": 30,
+        "preco": 38.9,
+        "imagem": "img\/cimento.jpg",
+        "ativo": true
+    },
+    {
+        "id": 2,
+        "categoria": "Cimento e Argamassa",
+        "nome": "Argamassa AC-II 20kg",
+        "descricao": "Para assentamento de pisos e revestimentos cerâmicos internos e externos.",
+        "estoque": 64,
+        "minimo": 20,
+        "preco": 24.5,
+        "imagem": "img\/argamassa.jpg",
+        "ativo": true
+    },
+    {
+        "id": 3,
+        "categoria": "Tintas",
+        "nome": "Tinta Acrílica Branca 18L",
+        "descricao": "Acabamento fosco, alto rendimento e ótima cobertura.",
+        "estoque": 18,
+        "minimo": 8,
+        "preco": 289.9,
+        "imagem": "img\/tinta.jpg",
+        "ativo": true
+    },
+    {
+        "id": 4,
+        "categoria": "Ferramentas",
+        "nome": "Martelo de Unha 27mm",
+        "descricao": "Cabo ergonômico antiderrapante e cabeça de aço forjado.",
+        "estoque": 35,
+        "minimo": 10,
+        "preco": 42,
+        "imagem": "img\/martelo.jpg",
+        "ativo": true
+    },
+    {
+        "id": 5,
+        "categoria": "Ferramentas",
+        "nome": "Furadeira de Impacto 650W",
+        "descricao": "Mandril de 13 mm, velocidade variável e reversão.",
+        "estoque": 7,
+        "minimo": 5,
+        "preco": 259,
+        "imagem": "img\/furadeira.jpg",
+        "ativo": true
+    },
+    {
+        "id": 6,
+        "categoria": "Elétrica",
+        "nome": "Fio Flexível 2,5mm 100m",
+        "descricao": "Rolo com 100 metros, isolamento 750V, certificado pelo Inmetro.",
+        "estoque": 42,
+        "minimo": 12,
+        "preco": 219.9,
+        "imagem": "img\/fio.jpg",
+        "ativo": true
+    },
+    {
+        "id": 7,
+        "categoria": "Hidráulica",
+        "nome": "Caixa d'água 1000L",
+        "descricao": "Polietileno com tampa rosqueável, proteção contra raios UV.",
+        "estoque": 5,
+        "minimo": 4,
+        "preco": 479,
+        "imagem": "img\/caixa-dagua.jpg",
+        "ativo": true
+    },
+    {
+        "id": 8,
+        "categoria": "Hidráulica",
+        "nome": "Tubo PVC Soldável 25mm 6m",
+        "descricao": "Barra de 6 metros para instalações de água fria.",
+        "estoque": 0,
+        "minimo": 20,
+        "preco": 31.8,
+        "imagem": "img\/tubo.jpg",
+        "ativo": true
+    }
+]
