@@ -84,6 +84,67 @@ function criarUsuario(string $nome, string $email, string $hash): int
     return (int) db()->lastInsertId();
 }
 
+/**
+ * E-mail em formato estrito: parte local + "@" + domínio com ponto e extensão de 2+ letras.
+ * (o FILTER_VALIDATE_EMAIL sozinho aceita coisas como "a@b", sem extensão)
+ */
+function emailValido(string $email): bool
+{
+    if ($email === '' || strlen($email) > 150 || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        return false;
+    }
+    [$local, $dominio] = explode('@', $email, 2) + ['', ''];
+    if ($local === '' || strlen($local) > 64 || strpos($email, '..') !== false
+        || $local[0] === '.' || substr($local, -1) === '.') {
+        return false;
+    }
+    return (bool) preg_match('/^[a-z0-9._%+\-]+@([a-z0-9]([a-z0-9\-]*[a-z0-9])?\.)+[a-z]{2,}$/i', $email);
+}
+
+/** Minúsculas, sem acentos e só letras/números — base de comparação entre senha e e-mail. */
+function normalizarComparacao(string $txt): string
+{
+    $txt = mb_strtolower($txt, 'UTF-8');
+    $txt = strtr($txt, [
+        'á'=>'a','à'=>'a','â'=>'a','ã'=>'a','ä'=>'a','é'=>'e','è'=>'e','ê'=>'e','ë'=>'e',
+        'í'=>'i','ì'=>'i','î'=>'i','ï'=>'i','ó'=>'o','ò'=>'o','ô'=>'o','õ'=>'o','ö'=>'o',
+        'ú'=>'u','ù'=>'u','û'=>'u','ü'=>'u','ç'=>'c','ñ'=>'n',
+    ]);
+    return (string) preg_replace('/[^a-z0-9]/', '', $txt);
+}
+
+/**
+ * true se a senha contém parte do e-mail: o usuário (antes do "@") ou o nome do
+ * domínio (ex.: "gmail"), inteiros ou em trechos de 4+ caracteres seguidos.
+ * Ignora maiúsculas, acentos e pontuação ("Joao_Silva1" contém "joao.silva").
+ */
+function senhaTemParteDoEmail(string $senha, string $email): bool
+{
+    $senhaN = normalizarComparacao($senha);
+    [$local, $dominio] = explode('@', strtolower($email), 2) + ['', ''];
+    $partes = [$local, explode('.', $dominio)[0]];
+
+    foreach ($partes as $parte) {
+        $parte = normalizarComparacao($parte);
+        $tam   = strlen($parte);
+        if ($tam < 3) {
+            continue;   // trechos muito curtos gerariam falsos positivos
+        }
+        if ($tam <= 4) {
+            if (strpos($senhaN, $parte) !== false) {
+                return true;
+            }
+            continue;
+        }
+        for ($i = 0; $i + 4 <= $tam; $i++) {
+            if (strpos($senhaN, substr($parte, $i, 4)) !== false) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 function ipCliente(): string
 {
     return substr((string) ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0'), 0, 45);

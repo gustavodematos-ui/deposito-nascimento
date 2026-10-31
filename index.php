@@ -154,10 +154,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if (mb_strlen($nome) < 2 || mb_strlen($nome) > 100) {
                 aviso('erro', 'Informe seu nome (2 a 100 caracteres).', 'cadastro', $old);
-            } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 150) {
-                aviso('erro', 'Informe um e-mail válido.', 'cadastro', $old);
+            } elseif (!emailValido($email)) {
+                aviso('erro', 'Informe um e-mail em formato válido (ex.: nome@dominio.com.br).', 'cadastro', $old);
             } elseif (strlen($senha) < 8) {
                 aviso('erro', 'A senha precisa ter pelo menos 8 caracteres.', 'cadastro', $old);
+            } elseif (senhaTemParteDoEmail($senha, $email)) {
+                aviso('erro', 'A senha não pode conter parte do seu e-mail.', 'cadastro', $old);
             } elseif ($senha !== $conf) {
                 aviso('erro', 'As senhas não coincidem.', 'cadastro', $old);
             } elseif (buscarUsuario($email)) {
@@ -189,6 +191,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if (acessoBloqueado()) {
                 aviso('erro', 'Muitas tentativas. Aguarde alguns minutos e tente de novo.', 'login', ['email' => $email]);
+                irPara($voltar);
+            }
+
+            if (!emailValido($email)) {
+                aviso('erro', 'Informe um e-mail em formato válido (ex.: nome@dominio.com.br).', 'login', ['email' => $email]);
+                irPara($voltar);
+            }
+            if (senhaTemParteDoEmail($senha, $email)) {
+                aviso('erro', 'A senha não pode conter parte do e-mail.', 'login', ['email' => $email]);
                 irPara($voltar);
             }
 
@@ -975,7 +986,7 @@ $valorDescontoIni = round($subtotal * $descontoInicial / 100, 2);
                     <div class="campo">
                         <label for="r-senha">Senha</label>
                         <input type="password" id="r-senha" name="senha" minlength="8" autocomplete="new-password" required>
-                        <small>Mínimo de 8 caracteres.</small>
+                        <small>Mínimo de 8 caracteres, sem partes do seu e-mail.</small>
                     </div>
                     <div class="campo">
                         <label for="r-senha2">Confirmar senha</label>
