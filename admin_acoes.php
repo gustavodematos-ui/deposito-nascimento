@@ -1,9 +1,9 @@
 <?php
 /**
  * Depósito Nascimento — ações do painel do administrador (POST).
- * Incluído pelo catalogo.php; todas as ações começam com "adm_".
+ * Incluído pelo index.php; todas as ações começam com "adm_".
  */
-defined('DIR_DADOS') or exit;
+defined('DEPOSITO') or exit;
 
 if (!$ehAdmin) {
     aviso('erro', 'Acesso restrito ao administrador.');
@@ -33,17 +33,7 @@ switch ($acao) {
         elseif (!is_numeric($precoIn) || $precoIn < 0 || $precoIn > 9999999) $erro = 'Informe um preço válido.';
         elseif ($estoque === false || $estoque < 0 || $estoque > 1000000)    $erro = 'O estoque deve ser um número inteiro, zero ou maior.';
         elseif ($minimo === false || $minimo < 0 || $minimo > 1000000)       $erro = 'O estoque mínimo deve ser um número inteiro, zero ou maior.';
-
-        $lista  = carregarProdutos();
-        $indice = null;
-        foreach ($lista as $k => $p) {
-            if ($p['id'] === $idEdit) {
-                $indice = $k;
-            }
-        }
-        if (!$erro && $idEdit && $indice === null) {
-            $erro = 'Produto não encontrado.';
-        }
+        elseif ($idEdit && !isset($mapa[$idEdit]))                           $erro = 'Produto não encontrado.';
 
         $novaImagem = null;
         if (!$erro) {
@@ -56,54 +46,63 @@ switch ($acao) {
 
         $preco = round((float) $precoIn, 2);
 
-        if ($idEdit) {
-            $antigo = $lista[$indice];
+        try {
+            $resultado = transacao(function (PDO $pdo) use ($idEdit, $nome, $cat, $desc, $preco, $estoque, $minimo, $ativo, $novaImagem, $mapa) {
+                if ($idEdit) {
+                    // Estoque atual lido com bloqueio: não sobrescreve vendas/recebimentos simultâneos sem registrar
+                    $st = $pdo->prepare('SELECT estoque FROM produtos WHERE id = ? FOR UPDATE');
+                    $st->execute([$idEdit]);
+                    $estoqueAtual = $st->fetchColumn();
+                    if ($estoqueAtual === false) {
+                        return ['erro' => 'Produto não encontrado.'];
+                    }
+                    $antigo  = $mapa[$idEdit];
+                    $produto = [
+                        'id' => $idEdit, 'nome' => $nome, 'categoria' => $cat, 'descricao' => $desc, 'preco' => $preco,
+                        'estoque' => $estoque, 'minimo' => $minimo, 'ativo' => $ativo,
+                        'imagem' => $novaImagem ?: $antigo['imagem'],
+                    ];
+                    atualizarProduto($produto);
+                    if ($estoque !== (int) $estoqueAtual) {
+                        registrarMovimentos([movimento($produto, 'Ajuste', $estoque - (int) $estoqueAtual, $estoque, 'Edição do produto')]);
+                    }
+                    return ['msg' => 'Produto "' . $nome . '" atualizado.', 'imagemAntiga' => $novaImagem ? $antigo['imagem'] : ''];
+                }
+
+                $novo = ['categoria' => $cat, 'nome' => $nome, 'descricao' => $desc, 'estoque' => $estoque,
+                         'minimo' => $minimo, 'preco' => $preco, 'imagem' => $novaImagem ?: '', 'ativo' => $ativo];
+                $novo['id'] = inserirProduto($novo);
+                if ($estoque > 0) {
+                    registrarMovimentos([movimento($novo, 'Entrada inicial', $estoque, $estoque, 'Cadastro do produto')]);
+                }
+                return ['msg' => 'Produto "' . $nome . '" adicionado ao catálogo.', 'imagemAntiga' => ''];
+            });
+        } catch (Throwable $e) {
             if ($novaImagem) {
-                removerImagem($antigo['imagem']);
+                removerImagem($novaImagem);   // não deixa arquivo órfão se o banco falhar
             }
-            $lista[$indice] = array_merge($antigo, [
-                'nome' => $nome, 'categoria' => $cat, 'descricao' => $desc, 'preco' => $preco,
-                'estoque' => $estoque, 'minimo' => $minimo, 'ativo' => $ativo,
-                'imagem' => $novaImagem ?: $antigo['imagem'],
-            ]);
-            if ($estoque !== $antigo['estoque']) {
-                registrarMovimentos([movimento($lista[$indice], 'Ajuste', $estoque - $antigo['estoque'], $estoque, 'Edição do produto')]);
-            }
-            $msg = 'Produto "' . $nome . '" atualizado.';
-        } else {
-            $novoId = 1;
-            foreach ($lista as $p) {
-                $novoId = max($novoId, $p['id'] + 1);
-            }
-            $novo = ['id' => $novoId, 'categoria' => $cat, 'nome' => $nome, 'descricao' => $desc, 'estoque' => $estoque,
-                     'minimo' => $minimo, 'preco' => $preco, 'imagem' => $novaImagem ?: '', 'ativo' => $ativo];
-            $lista[] = $novo;
-            if ($estoque > 0) {
-                registrarMovimentos([movimento($novo, 'Entrada inicial', $estoque, $estoque, 'Cadastro do produto')]);
-            }
-            $msg = 'Produto "' . $nome . '" adicionado ao catálogo.';
+            throw $e;
         }
 
-        if (salvarProdutos($lista)) {
-            aviso('ok', $msg);
-            irPainel('produtos');
+        if (isset($resultado['erro'])) {
+            if ($novaImagem) {
+                removerImagem($novaImagem);
+            }
+            aviso('erro', $resultado['erro'], null, $old);
+            irPainel('produtos', $destino);
         }
-        aviso('erro', 'Não foi possível salvar. Verifique as permissões da pasta "dados".', null, $old);
-        irPainel('produtos', $destino);
+        if ($resultado['imagemAntiga'] !== '') {
+            removerImagem($resultado['imagemAntiga']);
+        }
+        aviso('ok', $resultado['msg']);
+        irPainel('produtos');
 
     case 'adm_produto_excluir':
         $idDel = (int) ($_POST['id'] ?? 0);
-        $lista = carregarProdutos();
-        $nomeDel = null;
-        foreach ($lista as $k => $p) {
-            if ($p['id'] === $idDel) {
-                $nomeDel = $p['nome'];
-                removerImagem($p['imagem']);
-                unset($lista[$k]);
-            }
-        }
-        if ($nomeDel !== null && salvarProdutos($lista)) {
-            aviso('ok', 'Produto "' . $nomeDel . '" excluído. Pedidos antigos continuam com o histórico dele.');
+        $prod  = excluirProduto($idDel);
+        if ($prod) {
+            removerImagem((string) $prod['imagem']);
+            aviso('ok', 'Produto "' . $prod['nome'] . '" excluído. Pedidos antigos continuam com o histórico dele.');
         } else {
             aviso('erro', 'Produto não encontrado.');
         }
@@ -114,94 +113,54 @@ switch ($acao) {
         $idAj   = (int) ($_POST['id'] ?? 0);
         $delta  = filter_var($_POST['delta'] ?? '', FILTER_VALIDATE_INT);
         $motivo = mb_substr(trim((string) ($_POST['motivo'] ?? '')), 0, 120) ?: 'Ajuste manual';
-        $lista  = carregarProdutos();
-        $feito  = false;
 
         if ($delta === false || $delta === 0 || abs($delta) > 1000000) {
             aviso('erro', 'Informe uma quantidade inteira diferente de zero (use negativo para saída).');
             irPainel('estoque');
         }
-        foreach ($lista as $k => $p) {
-            if ($p['id'] === $idAj) {
-                $saldo = $p['estoque'] + $delta;
-                if ($saldo < 0) {
-                    aviso('erro', 'A saída é maior que o estoque atual (' . $p['estoque'] . ').');
-                    irPainel('estoque');
-                }
-                $lista[$k]['estoque'] = $saldo;
-                registrarMovimentos([movimento($p, 'Ajuste', $delta, $saldo, $motivo)]);
-                $feito = true;
+
+        $res = transacao(function (PDO $pdo) use ($idAj, $delta, $motivo) {
+            $st = $pdo->prepare('SELECT id, nome, estoque FROM produtos WHERE id = ? FOR UPDATE');
+            $st->execute([$idAj]);
+            $p = $st->fetch();
+            if (!$p) {
+                return ['erro', 'Produto não encontrado.'];
             }
-        }
-        if ($feito && salvarProdutos($lista)) {
-            aviso('ok', 'Estoque ajustado.');
-        } else {
-            aviso('erro', 'Produto não encontrado.');
-        }
+            $saldo = (int) $p['estoque'] + $delta;
+            if ($saldo < 0) {
+                return ['erro', 'A saída é maior que o estoque atual (' . (int) $p['estoque'] . ').'];
+            }
+            $pdo->prepare('UPDATE produtos SET estoque = ?, atualizado_em = ? WHERE id = ?')
+                ->execute([$saldo, date('Y-m-d H:i:s'), $idAj]);
+            registrarMovimentos([movimento(['id' => (int) $p['id'], 'nome' => $p['nome']], 'Ajuste', $delta, $saldo, $motivo)]);
+            return ['ok', 'Estoque ajustado.'];
+        });
+        aviso($res[0], $res[1]);
         irPainel('estoque');
 
     case 'adm_estoque_minimo':
         $idMin  = (int) ($_POST['id'] ?? 0);
         $minimo = filter_var($_POST['minimo'] ?? '', FILTER_VALIDATE_INT);
-        $lista  = carregarProdutos();
         if ($minimo === false || $minimo < 0 || $minimo > 1000000) {
             aviso('erro', 'Estoque mínimo inválido.');
             irPainel('estoque');
         }
-        foreach ($lista as $k => $p) {
-            if ($p['id'] === $idMin) {
-                $lista[$k]['minimo'] = $minimo;
-            }
+        if (isset($mapa[$idMin])) {
+            db()->prepare('UPDATE produtos SET minimo = ?, atualizado_em = ? WHERE id = ?')
+                ->execute([$minimo, date('Y-m-d H:i:s'), $idMin]);
+            aviso('ok', 'Estoque mínimo atualizado.');
+        } else {
+            aviso('erro', 'Produto não encontrado.');
         }
-        salvarProdutos($lista);
-        aviso('ok', 'Estoque mínimo atualizado.');
         irPainel('estoque');
 
     /* ------------------- PEDIDOS ------------------- */
     case 'adm_pedido_status':
-        $email  = strtolower(trim((string) ($_POST['email'] ?? '')));
         $numero = (int) ($_POST['numero'] ?? 0);
-        $op     = $_POST['op'] ?? '';
+        $op     = (string) ($_POST['op'] ?? '');
         $aba    = in_array($_POST['aba'] ?? '', ['andamento', 'vendas', 'cancelados'], true) ? $_POST['aba'] : 'andamento';
-        $usuarios = lerJson('usuarios.json');
-        $mensagem = ['erro', 'Pedido não encontrado.'];
-
-        foreach ($usuarios[$email]['pedidos'] ?? [] as $i => $ped) {
-            if ($ped['numero'] !== $numero) {
-                continue;
-            }
-            if ($ped['status'] >= 3) {
-                $mensagem = ['erro', 'Este pedido já foi encerrado e não pode ser alterado.'];
-                break;
-            }
-
-            if ($op === 'cancelar') {
-                $usuarios[$email]['pedidos'][$i]['status'] = 4;
-                $mensagem = ['ok', 'Pedido #' . $numero . ' cancelado. As unidades reservadas foram liberadas.'];
-            } else {
-                $novo = $ped['status'] + 1;
-                if ($novo === 3) {
-                    // Entrega concluída: baixa definitiva no estoque
-                    $lista = carregarProdutos();
-                    $movs  = [];
-                    foreach ($ped['itens'] as $item) {
-                        foreach ($lista as $k => $p) {
-                            if ($p['id'] === $item['id']) {
-                                $lista[$k]['estoque'] = max(0, $p['estoque'] - $item['qtd']);
-                                $movs[] = movimento($p, 'Venda', -$item['qtd'], $lista[$k]['estoque'], 'Pedido #' . $numero);
-                            }
-                        }
-                    }
-                    salvarProdutos($lista);
-                    registrarMovimentos($movs);
-                }
-                $usuarios[$email]['pedidos'][$i]['status'] = $novo;
-                $mensagem = ['ok', 'Pedido #' . $numero . ' atualizado para "' . $etapas[$novo] . '".'];
-            }
-            gravarJson('usuarios.json', $usuarios);
-            break;
-        }
-        aviso($mensagem[0], $mensagem[1]);
+        $res    = alterarStatusPedido($numero, $op);
+        aviso($res[0], $res[1]);
         irPainel('pedidos', ['aba' => $aba]);
 
     /* ------------------- FORMAS DE PAGAMENTO ------------------- */
@@ -222,31 +181,16 @@ switch ($acao) {
         } elseif ($parcelas === false || $parcelas < 1 || $parcelas > 12) {
             aviso('erro', 'O número de parcelas deve estar entre 1 e 12.');
         } else {
-            $lista = carregarPagamentos();
-            $item  = ['nome' => $nome, 'descricao' => $desc, 'desconto' => round((float) $descIn, 2), 'parcelas' => $parcelas, 'ativo' => $ativo];
-            $achou = false;
-            foreach ($lista as $k => $p) {
-                if ($idPg && $p['id'] === $idPg) {
-                    $lista[$k] = ['id' => $idPg] + $item;
-                    $achou = true;
-                }
-            }
-            if (!$achou) {
-                $novoId = 1;
-                foreach ($lista as $p) {
-                    $novoId = max($novoId, $p['id'] + 1);
-                }
-                $lista[] = ['id' => $novoId] + $item;
-            }
-            gravarJson('pagamentos.json', $lista);
+            $achou = salvarPagamento($idPg, [
+                'nome' => $nome, 'descricao' => $desc, 'desconto' => round((float) $descIn, 2),
+                'parcelas' => $parcelas, 'ativo' => $ativo,
+            ]);
             aviso('ok', $achou ? 'Forma de pagamento atualizada.' : 'Forma de pagamento adicionada.');
         }
         irPainel('pagamentos');
 
     case 'adm_pagamento_excluir':
-        $idPg  = (int) ($_POST['id'] ?? 0);
-        $lista = array_values(array_filter(carregarPagamentos(), fn($p) => $p['id'] !== $idPg));
-        gravarJson('pagamentos.json', $lista);
+        excluirPagamento((int) ($_POST['id'] ?? 0));
         aviso('ok', 'Forma de pagamento removida.');
         irPainel('pagamentos');
 
@@ -269,51 +213,15 @@ switch ($acao) {
         } elseif ($previsao !== '' && !(DateTime::createFromFormat('Y-m-d', $previsao) && DateTime::createFromFormat('Y-m-d', $previsao)->format('Y-m-d') === $previsao)) {
             aviso('erro', 'Data de previsão inválida.');
         } else {
-            $repos = lerJson('reposicoes.json');
-            $novoId = 1;
-            foreach ($repos as $r) {
-                $novoId = max($novoId, $r['id'] + 1);
-            }
-            array_unshift($repos, [
-                'id' => $novoId, 'data' => date('d/m/Y'), 'produto_id' => $idProd, 'produto' => $mapa[$idProd]['nome'],
-                'qtd' => $qtd, 'fornecedor' => $fornecedor, 'custo' => round((float) $custoIn, 2),
-                'previsao' => $previsao !== '' ? date('d/m/Y', strtotime($previsao)) : '', 'status' => 'Solicitada',
-            ]);
-            gravarJson('reposicoes.json', $repos);
+            $novoId = criarReposicao($mapa[$idProd], $qtd, $fornecedor, round((float) $custoIn, 2), $previsao);
             aviso('ok', 'Reposição #' . $novoId . ' registrada.');
         }
         irPainel('reposicao');
 
     case 'adm_reposicao_receber':
     case 'adm_reposicao_cancelar':
-        $idRep = (int) ($_POST['id'] ?? 0);
-        $repos = lerJson('reposicoes.json');
-        $resultado = ['erro', 'Reposição não encontrada ou já encerrada.'];
-
-        foreach ($repos as $k => $r) {
-            if ($r['id'] !== $idRep || $r['status'] !== 'Solicitada') {
-                continue;
-            }
-            if ($acao === 'adm_reposicao_receber') {
-                $lista = carregarProdutos();
-                foreach ($lista as $j => $p) {
-                    if ($p['id'] === $r['produto_id']) {
-                        $lista[$j]['estoque'] += $r['qtd'];
-                        registrarMovimentos([movimento($p, 'Reposição', $r['qtd'], $lista[$j]['estoque'], 'Reposição #' . $idRep . ' — ' . $r['fornecedor'])]);
-                    }
-                }
-                salvarProdutos($lista);
-                $repos[$k]['status'] = 'Recebida';
-                $repos[$k]['recebida_em'] = date('d/m/Y');
-                $resultado = ['ok', 'Mercadoria recebida: +' . $r['qtd'] . ' un. de "' . $r['produto'] . '" no estoque.'];
-            } else {
-                $repos[$k]['status'] = 'Cancelada';
-                $resultado = ['ok', 'Reposição #' . $idRep . ' cancelada.'];
-            }
-            gravarJson('reposicoes.json', $repos);
-            break;
-        }
-        aviso($resultado[0], $resultado[1]);
+        $res = encerrarReposicao((int) ($_POST['id'] ?? 0), $acao === 'adm_reposicao_receber');
+        aviso($res[0], $res[1]);
         irPainel('reposicao');
 }
 

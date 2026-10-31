@@ -3,28 +3,25 @@
  * Depósito Nascimento — Loja + Painel do administrador
  *
  * Arquivos:
- *   catalogo.php    → ponto de entrada (esta página): rotas, loja do cliente, layout
- *   funcoes.php     → funções e camada de dados (JSON)
+ *   index.php       → ponto de entrada (esta página): rotas, loja do cliente, layout
+ *   config.php      → configurações (banco de dados, administrador)
+ *   db.php          → conexão PDO, criação do banco/tabelas e dados iniciais
+ *   funcoes.php     → funções e camada de dados (MySQL)
  *   admin_acoes.php → ações POST do painel (produtos, estoque, pedidos, pagamentos, reposição)
  *   admin_views.php → telas do painel
+ *   banco/esquema_mysql.sql → esquema do banco
  *   stleys.css + catalogo.css → estilos
  *
  * Loja:   ?secao=catalogo | carrinho | pedidos | compras | contato
  * Painel: ?painel=produtos | pedidos | estoque | pagamentos | reposicao | mensagens
- * Requer PHP 7.4+.
+ * Requer PHP 7.4+ com a extensão pdo_mysql (já vem ativa no XAMPP).
  */
 
 /* ==================================================================
- * 0) CONFIGURAÇÕES — EDITE ESTA ÁREA
+ * 0) CONFIGURAÇÕES
  * ================================================================== */
-
-// Credenciais do administrador. Defina as variáveis de ambiente ADMIN_EMAIL e
-// ADMIN_SENHA no servidor; os valores abaixo servem apenas para testes locais.
-define('ADMIN_EMAIL', getenv('ADMIN_EMAIL') ?: 'admin@exemplo.com.br');
-define('ADMIN_SENHA', getenv('ADMIN_SENHA') ?: 'troque-esta-senha');
-
-// true = contas novas já nascem com pedidos de exemplo. Em produção, deixe false.
-define('MODO_DEMO', true);
+define('DEPOSITO', true);          // libera a inclusão dos demais arquivos
+require __DIR__ . '/config.php';   // banco de dados, administrador, modo demo
 
 // Dados da empresa exibidos na seção Contato (substitua pelos reais).
 $empresa = [
@@ -36,7 +33,32 @@ $empresa = [
     'horario'  => 'Seg a Sex: 7h às 18h · Sáb: 7h às 12h',
 ];
 
-define('DIR_DADOS', __DIR__ . '/dados');
+/* Erros inesperados (ex.: MySQL desligado no XAMPP) viram uma página amigável. */
+set_exception_handler(function (Throwable $e) {
+    error_log('[Depósito Nascimento] ' . $e);
+    if (!headers_sent()) {
+        http_response_code(500);
+    }
+    $dica = '';
+    if ($e instanceof PDOException) {
+        $cod = (int) ($e->errorInfo[1] ?? $e->getCode());
+        if ($cod === 2002 || $cod === 2006) {
+            $dica = 'O MySQL não respondeu. Abra o Painel de Controle do XAMPP e clique em <strong>Start</strong> ao lado de MySQL.';
+        } elseif ($cod === 1045) {
+            $dica = 'Usuário ou senha do banco incorretos. Ajuste DB_USUARIO e DB_SENHA no config.php.';
+        } else {
+            $dica = 'Falha ao acessar o banco de dados. Confira as configurações do config.php.';
+        }
+    }
+    echo '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Erro | Depósito Nascimento</title></head>'
+       . '<body style="font-family:Arial,sans-serif;max-width:640px;margin:60px auto;padding:0 20px;color:#1E293B">'
+       . '<h1 style="color:#F97316">Ops, algo deu errado</h1>'
+       . '<p>' . ($dica ?: 'Não foi possível concluir a operação. Tente novamente em instantes.') . '</p>'
+       . (defined('DEBUG') && DEBUG ? '<pre style="background:#F1F5F9;padding:12px;white-space:pre-wrap">'
+            . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . '</pre>' : '')
+       . '</body></html>';
+    exit;
+});
 
 /* ==================================================================
  * 1) SESSÃO SEGURA, CSRF E FUNÇÕES
@@ -50,7 +72,7 @@ if (empty($_SESSION['csrf'])) {
     $_SESSION['csrf'] = bin2hex(random_bytes(32));
 }
 
-require __DIR__ . '/funcoes.php';
+require __DIR__ . '/funcoes.php';   // carrega também o db.php
 
 function pct(float $d): string
 {
@@ -67,7 +89,7 @@ foreach ($catalogoTodos as $p) {
 }
 $produtos = array_values(array_filter($catalogoTodos, fn($p) => $p['ativo'])); // só os visíveis na loja
 
-$etapas  = ['Pedido recebido', 'Em separação', 'Saiu para entrega', 'Entregue'];
+$etapas   = ETAPAS;
 $assuntos = ['Orçamento', 'Dúvida sobre produto', 'Entrega e prazos', 'Pedido já realizado', 'Sugestão ou reclamação', 'Outro assunto'];
 
 $secoes = [
@@ -92,9 +114,8 @@ $secoesAdmin = [
  * ================================================================== */
 $_SESSION['carrinho'] = $_SESSION['carrinho'] ?? [];
 
-$usuarios    = lerJson('usuarios.json');
 $emailSessao = $_SESSION['usuario_email'] ?? null;
-$usuario     = ($emailSessao && isset($usuarios[$emailSessao])) ? $usuarios[$emailSessao] : null;
+$usuario     = $emailSessao ? buscarUsuario((string) $emailSessao) : null;
 if ($emailSessao && !$usuario) {
     unset($_SESSION['usuario_email']);
 }
@@ -139,23 +160,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 aviso('erro', 'A senha precisa ter pelo menos 8 caracteres.', 'cadastro', $old);
             } elseif ($senha !== $conf) {
                 aviso('erro', 'As senhas não coincidem.', 'cadastro', $old);
-            } elseif (isset($usuarios[$email])) {
+            } elseif (buscarUsuario($email)) {
                 aviso('erro', 'Já existe uma conta com este e-mail. Use a aba "Entrar".', 'login', ['email' => $email]);
             } else {
-                $usuarios[$email] = [
-                    'nome'    => $nome,
-                    'email'   => $email,
-                    'hash'    => password_hash($senha, PASSWORD_DEFAULT),
-                    'criado'  => date('c'),
-                    'pedidos' => MODO_DEMO ? pedidosDemo($mapa, $usuarios) : [],
-                ];
-                if (gravarJson('usuarios.json', $usuarios)) {
+                try {
+                    transacao(function () use ($nome, $email, $senha, $mapa) {
+                        $uid = criarUsuario($nome, $email, password_hash($senha, PASSWORD_DEFAULT));
+                        if (MODO_DEMO) {
+                            criarPedidosDemo($uid, $mapa);
+                        }
+                    });
                     session_regenerate_id(true);
                     unset($_SESSION['admin']);
                     $_SESSION['usuario_email'] = $email;
                     aviso('ok', 'Conta criada! Bem-vindo(a), ' . explode(' ', $nome)[0] . '.');
-                } else {
-                    aviso('erro', 'Não foi possível salvar a conta. Verifique as permissões da pasta "dados".', 'cadastro', $old);
+                } catch (PDOException $e) {
+                    if ($e->getCode() !== '23000') {   // 23000 = e-mail duplicado (cadastro simultâneo)
+                        throw $e;
+                    }
+                    aviso('erro', 'Já existe uma conta com este e-mail. Use a aba "Entrar".', 'login', ['email' => $email]);
                 }
             }
             irPara($voltar);
@@ -169,12 +192,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 irPara($voltar);
             }
 
-            $u  = $usuarios[$email] ?? null;
+            $u  = buscarUsuario($email);
             $ok = $u ? password_verify($senha, $u['hash']) : (password_hash($senha, PASSWORD_DEFAULT) && false);
 
             if ($ok) {
                 session_regenerate_id(true);
-                unset($_SESSION['admin'], $_SESSION['tentativas']);
+                unset($_SESSION['admin']);
+                limparFalhas();
                 $_SESSION['usuario_email'] = $email;
                 aviso('ok', 'Olá, ' . explode(' ', $u['nome'])[0] . '! Você entrou na sua conta.');
             } else {
@@ -197,7 +221,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($emailOk && $senhaOk) {
                 session_regenerate_id(true);
-                unset($_SESSION['usuario_email'], $_SESSION['tentativas']);
+                unset($_SESSION['usuario_email']);
+                limparFalhas();
                 $_SESSION['admin'] = true;
                 aviso('ok', 'Acesso de administrador liberado.');
                 irPainel('produtos');          // área do administrador começa em "Produtos"
@@ -237,22 +262,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } elseif (mb_strlen($texto) < 10 || mb_strlen($texto) > 2000) {
                 aviso('erro', 'Escreva uma mensagem entre 10 e 2000 caracteres.', null, $old);
             } else {
-                $mensagens = lerJson('mensagens.json');
-                array_unshift($mensagens, [
-                    'id'       => uniqid('m', true),
-                    'data'     => date('d/m/Y H:i'),
-                    'nome'     => $nome,
-                    'email'    => $email,
-                    'telefone' => mb_substr(preg_replace('/[^0-9+()\- ]/', '', $telefone), 0, 20),
-                    'assunto'  => $assunto,
-                    'mensagem' => $texto,
-                ]);
-                if (gravarJson('mensagens.json', $mensagens)) {
-                    $_SESSION['ultimo_contato'] = time();
-                    aviso('ok', 'Mensagem enviada! Responderemos em breve.');
-                } else {
-                    aviso('erro', 'Não foi possível enviar agora. Tente pelo WhatsApp ou telefone.', null, $old);
-                }
+                salvarMensagem($nome, $email, mb_substr(preg_replace('/[^0-9+()\\- ]/', '', $telefone), 0, 20), $assunto, $texto);
+                $_SESSION['ultimo_contato'] = time();
+                aviso('ok', 'Mensagem enviada! Responderemos em breve.');
             }
             irPara('contato');
 
@@ -316,39 +328,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 irPara('carrinho');
             }
 
-            $itens = [];
-            foreach ($_SESSION['carrinho'] as $pid => $qtd) {
-                if (isset($mapa[$pid]) && $mapa[$pid]['ativo'] && $qtd <= disponivel($mapa[$pid])) {
-                    $itens[] = itemPedido($mapa, $pid, $qtd);
-                }
-            }
-            if (!$itens) {
-                aviso('erro', 'Os itens do carrinho não estão mais disponíveis.');
-                irPara('carrinho');
-            }
-
-            $bruto = totalItens($itens);
-            $usuarios = lerJson('usuarios.json');
-            array_unshift($usuarios[$usuario['email']]['pedidos'], [
-                'numero'    => proximoNumeroPedido($usuarios),
-                'data'      => date('d/m/Y'),
-                'status'    => 0,
-                'itens'     => $itens,
-                'pagamento' => ['id' => $pagamento['id'], 'nome' => $pagamento['nome'], 'desconto' => $pagamento['desconto']],
-                'total'     => round($bruto * (1 - $pagamento['desconto'] / 100), 2),
-            ]);
-            if (gravarJson('usuarios.json', $usuarios)) {
+            $res = criarPedido($usuario['id'], $pagamento, $_SESSION['carrinho']);
+            if ($res['ok']) {
                 $_SESSION['carrinho'] = [];
-                aviso('ok', 'Pedido realizado com sucesso! Acompanhe o andamento abaixo.');
+                aviso('ok', 'Pedido #' . $res['numero'] . ' realizado com sucesso! Acompanhe o andamento abaixo.'
+                    . ($res['removidos'] ? ' Itens sem estoque suficiente ficaram de fora do pedido.' : ''));
                 irPara('pedidos');
             }
-            aviso('erro', 'Não foi possível registrar o pedido. Tente novamente.');
+            aviso('erro', $res['erro']);
             irPara('carrinho');
 
         case 'recomprar':
             $numero = (int) ($_POST['numero'] ?? 0);
             $adicionados = 0;
-            foreach ($usuario['pedidos'] ?? [] as $pedido) {
+            foreach ($usuario ? carregarPedidos($usuario['id']) : [] as $pedido) {
                 if ($pedido['numero'] !== $numero || $pedido['status'] !== 3) {
                     continue;
                 }
@@ -397,10 +390,12 @@ $abrirModal = $flash['modal'] ?? '';
 
 $qtdCarrinho = array_sum($_SESSION['carrinho']);
 
-$todosPedidos   = $usuario['pedidos'] ?? [];
+// Pedidos completos só são lidos nas telas que os exibem; o selo do menu usa um COUNT leve
+$todosPedidos   = ($usuario && !$areaAdmin && in_array($secao, ['pedidos', 'compras'], true))
+    ? carregarPedidos($usuario['id']) : [];
 $pedidosCliente = array_values(array_filter($todosPedidos, fn($p) => $p['status'] !== 3));  // em andamento + cancelados
 $compras        = array_values(array_filter($todosPedidos, fn($p) => $p['status'] === 3));
-$qtdPedidos     = count(array_filter($todosPedidos, fn($p) => $p['status'] < 3));
+$qtdPedidos     = $usuario ? contarPedidosAbertos($usuario['id']) : 0;
 
 $categorias = array_values(array_unique(array_column($produtos, 'categoria')));
 $catAtual   = $_GET['cat'] ?? '';

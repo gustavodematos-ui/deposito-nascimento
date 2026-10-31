@@ -1,9 +1,9 @@
 <?php
 /**
  * Depósito Nascimento — telas do painel do administrador.
- * Incluído pelo catalogo.php dentro de <main>. Usa $painel para escolher a tela.
+ * Incluído pelo index.php dentro de <main>. Usa $painel para escolher a tela.
  */
-defined('DIR_DADOS') or exit;
+defined('DEPOSITO') or exit;
 
 $reservas = reservadoMapa();
 ?>
@@ -155,7 +155,7 @@ $reservas = reservadoMapa();
 <?php /* ============================== PEDIDOS ============================== */ ?>
 <?php elseif ($painel === 'pedidos'):
     $aba = in_array($_GET['aba'] ?? '', ['vendas', 'cancelados'], true) ? $_GET['aba'] : 'andamento';
-    $todosPed = listarPedidos($usuarios);
+    $todosPed = listarPedidos();
 
     $andamento  = array_values(array_filter($todosPed, fn($p) => $p['status'] < 3));
     $vendas     = array_values(array_filter($todosPed, fn($p) => $p['status'] === 3));
@@ -270,7 +270,7 @@ $reservas = reservadoMapa();
         $valorEstoque += $p['estoque'] * $p['preco'];
         if ($p['estoque'] <= 0) { $esgotados++; } elseif ($disp <= $p['minimo']) { $baixos++; }
     }
-    $historico = array_slice(lerJson('movimentos.json'), 0, 20);
+    $historico = listarMovimentos(20);
 ?>
     <div class="section-title">
         <h2>Estoque</h2>
@@ -410,7 +410,7 @@ $reservas = reservadoMapa();
 
 <?php /* ============================== REPOSIÇÃO ============================== */ ?>
 <?php elseif ($painel === 'reposicao'):
-    $repos = lerJson('reposicoes.json');
+    $repos = listarReposicoes();
     $pendentes = [];
     foreach ($repos as $r) {
         if ($r['status'] === 'Solicitada') {
@@ -526,7 +526,8 @@ $reservas = reservadoMapa();
 
 <?php /* ============================== MENSAGENS ============================== */ ?>
 <?php else:
-    $mensagensRecebidas = lerJson('mensagens.json');
+    $mensagensRecebidas = listarMensagens();
+    marcarMensagensLidas();   // as marcadas como "Nova" abaixo já foram lidas a partir de agora
 ?>
     <div class="section-title">
         <h2>Mensagens recebidas</h2>
@@ -552,7 +553,7 @@ $reservas = reservadoMapa();
                             </small>
                         </div>
                         <div style="text-align:right">
-                            <span class="status-tag"><?= h($m['assunto']) ?></span><br>
+                            <?php if (!$m['lida']): ?><span class="status-tag entregue">Nova</span> <?php endif; ?><span class="status-tag"><?= h($m['assunto']) ?></span><br>
                             <small><?= h($m['data']) ?></small>
                         </div>
                     </div>

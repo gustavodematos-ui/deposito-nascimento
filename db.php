@@ -1,31 +1,15 @@
 <?php
 /**
- * Depósito Nascimento — conexão com o banco de dados (PDO).
+ * Depósito Nascimento — conexão com o MySQL/MariaDB (PDO).
  *
- * Suporta SQLite (padrão, sem instalação) e MySQL/MariaDB. Na primeira execução:
- *   1) cria as tabelas a partir de banco/esquema_<driver>.sql;
- *   2) importa os arquivos JSON antigos da pasta "dados" (se existirem) ou
- *      cadastra os produtos e formas de pagamento padrão.
+ * Na primeira execução:
+ *   1) cria o banco (se não existir) e as tabelas de banco/esquema_mysql.sql;
+ *   2) importa os JSON antigos da pasta "dados" (se existirem) ou cadastra
+ *      os produtos e formas de pagamento padrão.
  *
  * Não acesse diretamente: é incluído pelo funcoes.php.
  */
-defined('DIR_DADOS') or exit;
-
-/** Cria a pasta "dados" protegida contra acesso direto pelo navegador (Apache). */
-function garantirPastaDados(): void
-{
-    if (!is_dir(DIR_DADOS)) {
-        @mkdir(DIR_DADOS, 0750, true);
-    }
-    if (is_dir(DIR_DADOS)) {
-        if (!is_file(DIR_DADOS . '/.htaccess')) {
-            @file_put_contents(DIR_DADOS . '/.htaccess', "Require all denied\n");
-        }
-        if (!is_file(DIR_DADOS . '/index.html')) {
-            @file_put_contents(DIR_DADOS . '/index.html', '');
-        }
-    }
-}
+defined('DEPOSITO') or exit;
 
 /** Conexão única com o banco (criada sob demanda). */
 function db(): PDO
@@ -40,34 +24,56 @@ function db(): PDO
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES   => false,
     ];
+    $dsn = function (bool $comBanco): string {
+        return sprintf('mysql:host=%s;port=%d;%scharset=utf8mb4', DB_HOST, DB_PORTA,
+                       $comBanco ? 'dbname=' . DB_NOME . ';' : '');
+    };
 
-    if (DB_DRIVER === 'mysql') {
-        $dsn = sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', DB_HOST, DB_PORTA, DB_NOME);
-        $pdo = new PDO($dsn, DB_USUARIO, DB_SENHA, $opcoes);
-    } else {
-        garantirPastaDados();
-        $pdo = new PDO('sqlite:' . DB_ARQUIVO, null, null, $opcoes);
-        $pdo->exec('PRAGMA foreign_keys = ON');
-        $pdo->exec('PRAGMA busy_timeout = 5000');
-        $pdo->exec('PRAGMA journal_mode = WAL');
+    try {
+        $pdo = new PDO($dsn(true), DB_USUARIO, DB_SENHA, $opcoes);
+    } catch (PDOException $e) {
+        // 1049 = banco desconhecido → cria o banco e reconecta
+        if ((int) $e->getCode() !== 1049 && (int) ($e->errorInfo[1] ?? 0) !== 1049) {
+            throw $e;
+        }
+        $servidor = new PDO($dsn(false), DB_USUARIO, DB_SENHA, $opcoes);
+        $servidor->exec('CREATE DATABASE IF NOT EXISTS `' . str_replace('`', '', DB_NOME)
+                      . '` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
+        $pdo = new PDO($dsn(true), DB_USUARIO, DB_SENHA, $opcoes);
     }
 
     prepararBanco($pdo);
     return $pdo;
 }
 
+/** Executa $fn dentro de uma transação (commit ao final, rollback se houver exceção). */
+function transacao(callable $fn)
+{
+    $pdo = db();
+    if ($pdo->inTransaction()) {
+        return $fn($pdo);
+    }
+    $pdo->beginTransaction();
+    try {
+        $resultado = $fn($pdo);
+        $pdo->commit();
+        return $resultado;
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+}
+
 function tabelaExiste(PDO $pdo, string $tabela): bool
 {
-    if (DB_DRIVER === 'mysql') {
-        $st = $pdo->prepare('SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?');
-    } else {
-        $st = $pdo->prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?");
-    }
+    $st = $pdo->prepare('SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?');
     $st->execute([$tabela]);
     return (bool) $st->fetchColumn();
 }
 
-/** Executa um arquivo .sql (comentários "--" e instruções separadas por ";"). */
+/** Executa um arquivo .sql (linhas de comentário "--" e instruções separadas por ";"). */
 function executarScript(PDO $pdo, string $sql): void
 {
     $sql = preg_replace('/^\s*--.*$/m', '', $sql);
@@ -88,33 +94,32 @@ function configLer(string $chave): ?string
 
 function configGravar(string $chave, string $valor): void
 {
-    $st = db()->prepare('DELETE FROM config WHERE chave = ?');
-    $st->execute([$chave]);
-    $st = db()->prepare('INSERT INTO config (chave, valor) VALUES (?, ?)');
-    $st->execute([$chave, $valor]);
+    db()->prepare('INSERT INTO config (chave, valor) VALUES (?, ?) ON DUPLICATE KEY UPDATE valor = VALUES(valor)')
+        ->execute([$chave, $valor]);
 }
 
 /** Cria o esquema e os dados iniciais, se ainda não existirem. */
 function prepararBanco(PDO $pdo): void
 {
+    // "config" é a última tabela do esquema: se existe, o esquema foi aplicado por completo.
     if (!tabelaExiste($pdo, 'config')) {
-        $arquivo = __DIR__ . '/banco/esquema_' . DB_DRIVER . '.sql';
+        $arquivo = __DIR__ . '/banco/esquema_mysql.sql';
         if (!is_file($arquivo)) {
             throw new RuntimeException('Arquivo de esquema não encontrado: ' . $arquivo);
         }
         executarScript($pdo, (string) file_get_contents($arquivo));
     }
     if (configLer('semeado') === null) {
-        importarLegado();
+        semearBanco();
     }
 }
 
 /* ==================================================================
- * Importação dos JSON antigos (executa uma única vez)
+ * Dados iniciais (executa uma única vez)
  * ================================================================== */
 function lerJsonLegado(string $arquivo): ?array
 {
-    $caminho = DIR_DADOS . '/' . $arquivo;
+    $caminho = __DIR__ . '/dados/' . $arquivo;
     if (!is_file($caminho)) {
         return null;
     }
@@ -136,7 +141,11 @@ function dataBrParaSql(?string $data, ?string $padrao = null): string
     return $padrao;
 }
 
-function importarLegado(): void
+/**
+ * Popula o banco: usa os JSON antigos da pasta "dados" (migração) quando
+ * existirem; caso contrário, cadastra produtos e pagamentos padrão.
+ */
+function semearBanco(): void
 {
     transacao(function (PDO $pdo) {
         $agora = date('Y-m-d H:i:s');
@@ -149,7 +158,7 @@ function importarLegado(): void
             $ins->execute([
                 (int) $p['id'], (string) $p['categoria'], (string) $p['nome'], (string) ($p['descricao'] ?? ''),
                 max(0, (int) $p['estoque']), max(0, (int) ($p['minimo'] ?? 10)), round((float) $p['preco'], 2),
-                (string) ($p['imagem'] ?? ''), !empty($p['ativo']) || !array_key_exists('ativo', $p) ? 1 : 0, $agora, $agora,
+                (string) ($p['imagem'] ?? ''), (!array_key_exists('ativo', $p) || !empty($p['ativo'])) ? 1 : 0, $agora, $agora,
             ]);
         }
 
@@ -160,9 +169,12 @@ function importarLegado(): void
             $ins->execute([
                 (int) $p['id'], (string) $p['nome'], (string) ($p['descricao'] ?? ''),
                 min(50, max(0, (float) ($p['desconto'] ?? 0))), min(12, max(1, (int) ($p['parcelas'] ?? 1))),
-                !empty($p['ativo']) || !array_key_exists('ativo', $p) ? 1 : 0,
+                (!array_key_exists('ativo', $p) || !empty($p['ativo'])) ? 1 : 0,
             ]);
         }
+
+        $idsProdutos = array_flip(array_map('intval', array_column($produtos, 'id')));
+        $idsPagto    = array_flip(array_map('intval', array_column($pagamentos, 'id')));
 
         // Clientes e pedidos (usuarios.json: e-mail => {nome, hash, criado, pedidos[]})
         $usuarios = lerJsonLegado('usuarios.json') ?? [];
@@ -170,8 +182,6 @@ function importarLegado(): void
         $insP = $pdo->prepare('INSERT INTO pedidos (id, usuario_id, status, subtotal, desconto_pct, total, pagamento_id, pagamento_nome, criado_em, atualizado_em)
                                VALUES (?,?,?,?,?,?,?,?,?,?)');
         $insI = $pdo->prepare('INSERT INTO pedido_itens (pedido_id, produto_id, nome, qtd, preco) VALUES (?,?,?,?,?)');
-        $idsProdutos = array_flip(array_map('intval', array_column($produtos, 'id')));
-        $idsPagto    = array_flip(array_map('intval', array_column($pagamentos, 'id')));
 
         foreach ($usuarios as $email => $u) {
             $criado = strtotime((string) ($u['criado'] ?? '')) ?: time();
@@ -183,7 +193,7 @@ function importarLegado(): void
                 foreach ($ped['itens'] as $i) {
                     $bruto += $i['qtd'] * $i['preco'];
                 }
-                $pag  = $ped['pagamento'] ?? null;
+                $pag    = $ped['pagamento'] ?? null;
                 $quando = dataBrParaSql($ped['data'] ?? null);
                 $insP->execute([
                     (int) $ped['numero'], $uid, (int) $ped['status'], round($bruto, 2),
@@ -220,7 +230,8 @@ function importarLegado(): void
             $insR->execute([
                 (int) $r['id'], isset($idsProdutos[(int) $r['produto_id']]) ? (int) $r['produto_id'] : null,
                 (string) $r['produto'], (int) $r['qtd'], (string) $r['fornecedor'], round((float) ($r['custo'] ?? 0), 2),
-                $prev, (string) $r['status'], dataBrParaSql($r['data'] ?? null),
+                $prev, in_array($r['status'], ['Solicitada', 'Recebida', 'Cancelada'], true) ? $r['status'] : 'Solicitada',
+                dataBrParaSql($r['data'] ?? null),
                 !empty($r['recebida_em']) ? dataBrParaSql($r['recebida_em']) : null,
             ]);
         }
