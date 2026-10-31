@@ -12,8 +12,9 @@
  *   banco/esquema_mysql.sql → esquema do banco
  *   stleys.css + catalogo.css → estilos
  *
- * Loja:   ?secao=catalogo | carrinho | pedidos | compras | contato
- * Painel: ?painel=produtos | pedidos | estoque | pagamentos | reposicao | mensagens
+ * Loja (clientes):   ?secao=catalogo | carrinho | pedidos | compras   (Contato abre o WhatsApp)
+ * Painel (admin):    ?painel=produtos | pedidos | estoque | pagamentos | reposicao
+ * O administrador não acessa a loja: ao entrar, só vê o painel.
  * Requer PHP 7.4+ com a extensão pdo_mysql (já vem ativa no XAMPP).
  */
 
@@ -23,14 +24,9 @@
 define('DEPOSITO', true);          // libera a inclusão dos demais arquivos
 require __DIR__ . '/config.php';   // banco de dados, administrador, modo demo
 
-// Dados da empresa exibidos na seção Contato (substitua pelos reais).
+// Contato: o menu "Contato" apenas abre o WhatsApp (DDI + DDD + número, só dígitos).
 $empresa = [
-    'endereco' => 'Rua Exemplo, 123 — Centro',
-    'cidade'   => 'Sua Cidade / UF',
-    'telefone' => '(00) 0000-0000',
     'whatsapp' => '5500000000000',
-    'email'    => 'contato@exemplo.com.br',
-    'horario'  => 'Seg a Sex: 7h às 18h · Sáb: 7h às 12h',
 ];
 
 /* Erros inesperados (ex.: MySQL desligado no XAMPP) viram uma página amigável. */
@@ -74,11 +70,6 @@ if (empty($_SESSION['csrf'])) {
 
 require __DIR__ . '/funcoes.php';   // carrega também o db.php
 
-function pct(float $d): string
-{
-    return rtrim(rtrim(number_format($d, 2, ',', ''), '0'), ',');
-}
-
 /* ==================================================================
  * 2) DADOS BÁSICOS
  * ================================================================== */
@@ -90,14 +81,13 @@ foreach ($catalogoTodos as $p) {
 $produtos = array_values(array_filter($catalogoTodos, fn($p) => $p['ativo'])); // só os visíveis na loja
 
 $etapas   = ETAPAS;
-$assuntos = ['Orçamento', 'Dúvida sobre produto', 'Entrega e prazos', 'Pedido já realizado', 'Sugestão ou reclamação', 'Outro assunto'];
+$urlWhats = 'https://wa.me/' . preg_replace('/\D/', '', $empresa['whatsapp']);
 
 $secoes = [
     'catalogo' => ['Catálogo',       'fa-store'],
     'carrinho' => ['Carrinho',       'fa-cart-shopping'],
     'pedidos'  => ['Meus pedidos',   'fa-box-open'],
     'compras'  => ['Minhas compras', 'fa-receipt'],
-    'contato'  => ['Contato',        'fa-headset'],
 ];
 
 $secoesAdmin = [
@@ -106,7 +96,6 @@ $secoesAdmin = [
     'estoque'    => ['Estoque',            'fa-warehouse'],
     'pagamentos' => ['Forma de pagamento', 'fa-credit-card'],
     'reposicao'  => ['Reposição',          'fa-truck-ramp-box'],
-    'mensagens'  => ['Mensagens',          'fa-inbox'],
 ];
 
 /* ==================================================================
@@ -140,6 +129,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Ações do painel do administrador
     if (strpos($acao, 'adm_') === 0) {
         require __DIR__ . '/admin_acoes.php';
+    }
+
+    // O administrador só usa o painel: qualquer ação da loja/conta de cliente é bloqueada (exceto sair)
+    if ($ehAdmin && $acao !== 'sair') {
+        aviso('erro', 'O administrador acessa apenas o painel.');
+        irPainel('produtos');
     }
 
     switch ($acao) {
@@ -248,37 +243,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             aviso('ok', 'Você saiu da sua conta.');
             irPara('catalogo');
 
-        /* ------------------- CONTATO ------------------- */
-        case 'contato':
-            if (!empty($_POST['website'])) {            // armadilha anti-robô
-                aviso('ok', 'Mensagem enviada! Responderemos em breve.');
-                irPara('contato');
-            }
-
-            $nome     = trim((string) ($_POST['nome'] ?? ''));
-            $email    = trim((string) ($_POST['email'] ?? ''));
-            $telefone = trim((string) ($_POST['telefone'] ?? ''));
-            $assunto  = (string) ($_POST['assunto'] ?? '');
-            $texto    = trim((string) ($_POST['mensagem'] ?? ''));
-            $old      = compact('nome', 'email', 'telefone', 'assunto') + ['mensagem' => $texto];
-
-            if (($_SESSION['ultimo_contato'] ?? 0) > time() - 30) {
-                aviso('erro', 'Aguarde alguns segundos antes de enviar outra mensagem.', null, $old);
-            } elseif (mb_strlen($nome) < 2 || mb_strlen($nome) > 100) {
-                aviso('erro', 'Informe seu nome.', null, $old);
-            } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                aviso('erro', 'Informe um e-mail válido para podermos responder.', null, $old);
-            } elseif (!in_array($assunto, $assuntos, true)) {
-                aviso('erro', 'Escolha um assunto.', null, $old);
-            } elseif (mb_strlen($texto) < 10 || mb_strlen($texto) > 2000) {
-                aviso('erro', 'Escreva uma mensagem entre 10 e 2000 caracteres.', null, $old);
-            } else {
-                salvarMensagem($nome, $email, mb_substr(preg_replace('/[^0-9+()\\- ]/', '', $telefone), 0, 20), $assunto, $texto);
-                $_SESSION['ultimo_contato'] = time();
-                aviso('ok', 'Mensagem enviada! Responderemos em breve.');
-            }
-            irPara('contato');
-
         /* ------------------- LOJA ------------------- */
         case 'adicionar':
             $cat   = (string) ($_POST['cat'] ?? '');
@@ -317,9 +281,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         case 'finalizar':
             if (!$usuario) {
-                aviso('erro', $ehAdmin
-                    ? 'Administradores não fazem pedidos. Entre com uma conta de cliente.'
-                    : 'Entre na sua conta (ou crie uma) para finalizar o pedido.', $ehAdmin ? null : 'login');
+                aviso('erro', 'Entre na sua conta (ou crie uma) para finalizar o pedido.', 'login');
                 irPara('carrinho');
             }
             if (empty($_SESSION['carrinho'])) {
@@ -380,8 +342,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 /* ==================================================================
  * 5) PREPARAÇÃO DA PÁGINA
  * ================================================================== */
-// Administrador entra direto no painel (Produtos); a loja só abre com ?secao=
-$areaAdmin = $ehAdmin && !isset($_GET['secao']);
+// Administrador só enxerga o painel (nunca a loja do cliente)
+$areaAdmin = $ehAdmin;
 $painel    = $_GET['painel'] ?? 'produtos';
 if (!isset($secoesAdmin[$painel])) {
     $painel = 'produtos';
@@ -429,8 +391,6 @@ foreach ($_SESSION['carrinho'] as $pid => $qtd) {
 }
 
 $pagamentosAtivos = array_values(array_filter(carregarPagamentos(), fn($p) => $p['ativo']));
-$descontoInicial  = $pagamentosAtivos[0]['desconto'] ?? 0;
-$valorDescontoIni = round($subtotal * $descontoInicial / 100, 2);
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -458,9 +418,6 @@ $valorDescontoIni = round($subtotal * $descontoInicial / 100, 2);
                 </form>
             <?php elseif ($ehAdmin): ?>
                 <span class="tag-admin"><i class="fa-solid fa-shield-halved"></i> Admin</span>
-                <a href="<?= $areaAdmin ? '?secao=catalogo' : '?painel=produtos' ?>" class="account-btn header-link">
-                    <i class="fa-solid <?= $areaAdmin ? 'fa-store' : 'fa-gauge' ?>"></i> <?= $areaAdmin ? 'Ver loja' : 'Painel' ?>
-                </a>
                 <form method="post">
                     <?= csrf() ?><input type="hidden" name="acao" value="sair">
                     <button type="submit" class="account-btn"><i class="fa-solid fa-right-from-bracket"></i> Sair</button>
@@ -505,6 +462,9 @@ $valorDescontoIni = round($subtotal * $descontoInicial / 100, 2);
                         <?php if ($badge > 0): ?><span class="menu-badge"><?= (int) $badge ?></span><?php endif; ?>
                     </a>
                 <?php endforeach; ?>
+                <a href="<?= h($urlWhats) ?>" target="_blank" rel="noopener">
+                    <i class="fa-solid fa-headset"></i> Contato
+                </a>
             <?php endif; ?>
         </nav>
     </aside>
@@ -649,15 +609,11 @@ $valorDescontoIni = round($subtotal * $descontoInicial / 100, 2);
                     <?php endforeach; ?>
                 </div>
 
-                <aside class="resumo" data-subtotal="<?= h($subtotal) ?>">
+                <aside class="resumo">
                     <h3>Resumo do pedido</h3>
                     <div class="resumo-linha"><span>Itens (<?= (int) $qtdValida ?>)</span><span><?= moeda($subtotal) ?></span></div>
-                    <div class="resumo-linha resumo-desconto" id="linhaDesconto" <?= $descontoInicial > 0 ? '' : 'hidden' ?>>
-                        <span>Desconto (<span id="pctDesconto"><?= h(pct($descontoInicial)) ?></span>%)</span>
-                        <span id="valorDesconto">− <?= moeda($valorDescontoIni) ?></span>
-                    </div>
                     <div class="resumo-linha"><span>Entrega</span><span>A combinar</span></div>
-                    <div class="resumo-total"><span>Total</span><strong id="valorTotal"><?= moeda($subtotal - $valorDescontoIni) ?></strong></div>
+                    <div class="resumo-total"><span>Total</span><strong id="valorTotal"><?= moeda($subtotal) ?></strong></div>
 
                     <form method="post">
                         <?= csrf() ?>
@@ -670,13 +626,12 @@ $valorDescontoIni = round($subtotal * $descontoInicial / 100, 2);
                                 <?php foreach ($pagamentosAtivos as $n => $pg): ?>
                                     <label class="opcao-pagto">
                                         <input type="radio" name="pagamento_id" value="<?= (int) $pg['id'] ?>"
-                                               data-desconto="<?= h($pg['desconto']) ?>" <?= $n === 0 ? 'checked' : '' ?> required>
+                                               <?= $n === 0 ? 'checked' : '' ?> required>
                                         <span>
                                             <strong><?= h($pg['nome']) ?></strong>
                                             <small>
                                                 <?= h($pg['descricao']) ?>
                                                 <?= $pg['parcelas'] > 1 ? ' · até ' . (int) $pg['parcelas'] . 'x' : '' ?>
-                                                <?= $pg['desconto'] > 0 ? ' · ' . h(pct($pg['desconto'])) . '% de desconto' : '' ?>
                                             </small>
                                         </span>
                                     </label>
@@ -684,12 +639,12 @@ $valorDescontoIni = round($subtotal * $descontoInicial / 100, 2);
                             </fieldset>
                             <button type="submit" class="btn-checkout"><i class="fa-solid fa-check"></i> Finalizar pedido</button>
                         <?php else: ?>
-                            <p class="dica-login">Nenhuma forma de pagamento disponível no momento. Fale com a gente pela aba Contato.</p>
+                            <p class="dica-login">Nenhuma forma de pagamento disponível no momento. Fale com a gente pelo WhatsApp (menu Contato).</p>
                             <button type="submit" class="btn-checkout" disabled><i class="fa-solid fa-check"></i> Finalizar pedido</button>
                         <?php endif; ?>
                     </form>
 
-                    <?php if (!$usuario && !$ehAdmin): ?>
+                    <?php if (!$usuario): ?>
                         <p class="dica-login">Você precisará entrar na sua conta para concluir.</p>
                     <?php endif; ?>
                     <a href="?secao=catalogo" class="btn-link btn-outline btn-continuar">Continuar comprando</a>
@@ -708,13 +663,9 @@ $valorDescontoIni = round($subtotal * $descontoInicial / 100, 2);
         <?php if (!$usuario): ?>
             <div class="vazio">
                 <i class="fa-solid fa-lock"></i>
-                <h3><?= $ehAdmin ? 'Área exclusiva de clientes' : 'Entre para ver seus pedidos' ?></h3>
-                <p><?= $ehAdmin ? 'Você está logado como administrador. Gerencie os pedidos pelo painel.' : 'Faça login ou crie uma conta para acompanhar suas compras.' ?></p>
-                <?php if ($ehAdmin): ?>
-                    <a href="?painel=pedidos" class="btn-link"><i class="fa-solid fa-gauge"></i> Ir para o painel</a>
-                <?php else: ?>
-                    <button type="button" class="btn-link" data-abrir-modal="login"><i class="fa-solid fa-circle-user"></i> Entrar</button>
-                <?php endif; ?>
+                <h3>Entre para ver seus pedidos</h3>
+                <p>Faça login ou crie uma conta para acompanhar suas compras.</p>
+                <button type="button" class="btn-link" data-abrir-modal="login"><i class="fa-solid fa-circle-user"></i> Entrar</button>
             </div>
         <?php elseif (!$pedidosCliente): ?>
             <div class="vazio">
@@ -761,7 +712,7 @@ $valorDescontoIni = round($subtotal * $descontoInicial / 100, 2);
                             </ul>
 
                             <?php if (!empty($pedido['pagamento'])): ?>
-                                <div class="pedido-pagto"><i class="fa-solid fa-credit-card"></i> <?= h($pedido['pagamento']['nome']) ?><?= $pedido['pagamento']['desconto'] > 0 ? ' — ' . h(pct($pedido['pagamento']['desconto'])) . '% de desconto' : '' ?></div>
+                                <div class="pedido-pagto"><i class="fa-solid fa-credit-card"></i> <?= h($pedido['pagamento']['nome']) ?></div>
                             <?php endif; ?>
 
                             <div class="pedido-rodape">
@@ -784,13 +735,9 @@ $valorDescontoIni = round($subtotal * $descontoInicial / 100, 2);
         <?php if (!$usuario): ?>
             <div class="vazio">
                 <i class="fa-solid fa-lock"></i>
-                <h3><?= $ehAdmin ? 'Área exclusiva de clientes' : 'Entre para ver suas compras' ?></h3>
-                <p><?= $ehAdmin ? 'Você está logado como administrador. Veja as vendas pelo painel.' : 'Faça login ou crie uma conta para consultar seu histórico.' ?></p>
-                <?php if ($ehAdmin): ?>
-                    <a href="?painel=pedidos&aba=vendas" class="btn-link"><i class="fa-solid fa-gauge"></i> Ver vendas no painel</a>
-                <?php else: ?>
-                    <button type="button" class="btn-link" data-abrir-modal="login"><i class="fa-solid fa-circle-user"></i> Entrar</button>
-                <?php endif; ?>
+                <h3>Entre para ver suas compras</h3>
+                <p>Faça login ou crie uma conta para consultar seu histórico.</p>
+                <button type="button" class="btn-link" data-abrir-modal="login"><i class="fa-solid fa-circle-user"></i> Entrar</button>
             </div>
         <?php elseif (!$compras): ?>
             <div class="vazio">
@@ -847,86 +794,6 @@ $valorDescontoIni = round($subtotal * $descontoInicial / 100, 2);
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
-
-<?php /* ------------------------------ CONTATO ------------------------------ */ ?>
-<?php else: ?>
-
-        <div class="section-title">
-            <h2>Fale com a gente</h2>
-            <p>Tire dúvidas, peça um orçamento ou acompanhe uma entrega. Respondemos o quanto antes.</p>
-        </div>
-
-        <div class="contato-layout">
-            <div class="contato-info">
-                <div class="info-card">
-                    <div class="info-icone"><i class="fa-solid fa-location-dot"></i></div>
-                    <div><strong>Endereço</strong><span><?= h($empresa['endereco']) ?><br><?= h($empresa['cidade']) ?></span></div>
-                </div>
-                <div class="info-card">
-                    <div class="info-icone"><i class="fa-solid fa-phone"></i></div>
-                    <div><strong>Telefone</strong><span><?= h($empresa['telefone']) ?></span></div>
-                </div>
-                <div class="info-card">
-                    <div class="info-icone"><i class="fa-solid fa-envelope"></i></div>
-                    <div><strong>E-mail</strong><a href="mailto:<?= h($empresa['email']) ?>"><?= h($empresa['email']) ?></a></div>
-                </div>
-                <div class="info-card">
-                    <div class="info-icone"><i class="fa-solid fa-clock"></i></div>
-                    <div><strong>Horário de atendimento</strong><span><?= h($empresa['horario']) ?></span></div>
-                </div>
-                <a class="btn-link btn-whats" target="_blank" rel="noopener"
-                   href="https://wa.me/<?= h(preg_replace('/\D/', '', $empresa['whatsapp'])) ?>">
-                    <i class="fa-brands fa-whatsapp"></i> Chamar no WhatsApp
-                </a>
-            </div>
-
-            <form method="post" class="contato-form">
-                <?= csrf() ?>
-                <input type="hidden" name="acao" value="contato">
-                <h3>Envie uma mensagem</h3>
-                <p>Preencha o formulário e retornaremos por e-mail.</p>
-
-                <div class="campo-linha">
-                    <div class="campo">
-                        <label for="c-nome">Nome</label>
-                        <input type="text" id="c-nome" name="nome" maxlength="100" required
-                               value="<?= h($old['nome'] ?? ($usuario['nome'] ?? '')) ?>">
-                    </div>
-                    <div class="campo">
-                        <label for="c-email">E-mail</label>
-                        <input type="email" id="c-email" name="email" maxlength="150" required
-                               value="<?= h($old['email'] ?? ($usuario['email'] ?? '')) ?>">
-                    </div>
-                </div>
-
-                <div class="campo-linha">
-                    <div class="campo">
-                        <label for="c-tel">Telefone <small style="display:inline">(opcional)</small></label>
-                        <input type="tel" id="c-tel" name="telefone" maxlength="20" value="<?= h($old['telefone'] ?? '') ?>">
-                    </div>
-                    <div class="campo">
-                        <label for="c-assunto">Assunto</label>
-                        <select id="c-assunto" name="assunto" required>
-                            <option value="">Selecione…</option>
-                            <?php foreach ($assuntos as $a): ?>
-                                <option value="<?= h($a) ?>" <?= ($old['assunto'] ?? '') === $a ? 'selected' : '' ?>><?= h($a) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="campo">
-                    <label for="c-msg">Mensagem</label>
-                    <textarea id="c-msg" name="mensagem" minlength="10" maxlength="2000" required><?= h($old['mensagem'] ?? '') ?></textarea>
-                </div>
-
-                <div class="hp-campo" aria-hidden="true">
-                    <label>Não preencha <input type="text" name="website" tabindex="-1" autocomplete="off"></label>
-                </div>
-
-                <button type="submit" class="btn-enviar"><i class="fa-solid fa-paper-plane"></i> Enviar mensagem</button>
-            </form>
-        </div>
 
 <?php endif; ?>
 
@@ -1047,23 +914,6 @@ $valorDescontoIni = round($subtotal * $descontoInicial / 100, 2);
             var arq = inputImg.files && inputImg.files[0];
             if (arq) document.getElementById('previaImagem').src = URL.createObjectURL(arq);
         });
-    }
-
-    // Carrinho: atualiza desconto e total ao trocar a forma de pagamento
-    var resumo = document.querySelector('.resumo[data-subtotal]');
-    if (resumo) {
-        var brl = function (v) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); };
-        var sub = parseFloat(resumo.dataset.subtotal) || 0;
-        var atualizar = function () {
-            var marcado = resumo.querySelector('input[name=pagamento_id]:checked');
-            var pct = marcado ? parseFloat(marcado.dataset.desconto) || 0 : 0;
-            var desc = Math.round(sub * pct) / 100;
-            document.getElementById('linhaDesconto').hidden = pct <= 0;
-            document.getElementById('pctDesconto').textContent = String(pct).replace('.', ',');
-            document.getElementById('valorDesconto').textContent = '− ' + brl(desc);
-            document.getElementById('valorTotal').textContent = brl(sub - desc);
-        };
-        resumo.querySelectorAll('input[name=pagamento_id]').forEach(function (r) { r.addEventListener('change', atualizar); });
     }
 
     // Modal de acesso

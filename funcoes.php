@@ -294,22 +294,21 @@ function removerImagem(string $caminho): void
 function pagamentosPadrao(): array
 {
     return [
-        ['id' => 1, 'nome' => 'PIX',                 'descricao' => 'Aprovação imediata, com desconto à vista.', 'desconto' => 5.0, 'parcelas' => 1, 'ativo' => true],
-        ['id' => 2, 'nome' => 'Cartão de crédito',   'descricao' => 'Parcelamento em até 6x.',                   'desconto' => 0.0, 'parcelas' => 6, 'ativo' => true],
-        ['id' => 3, 'nome' => 'Cartão de débito',    'descricao' => 'Débito na entrega ou na retirada.',         'desconto' => 0.0, 'parcelas' => 1, 'ativo' => true],
-        ['id' => 4, 'nome' => 'Boleto bancário',     'descricao' => 'Compensação em até 2 dias úteis.',          'desconto' => 0.0, 'parcelas' => 1, 'ativo' => true],
-        ['id' => 5, 'nome' => 'Dinheiro na entrega', 'descricao' => 'Pague ao receber os materiais.',            'desconto' => 0.0, 'parcelas' => 1, 'ativo' => false],
+        ['id' => 1, 'nome' => 'PIX',                 'descricao' => 'Aprovação imediata.',                'parcelas' => 1, 'ativo' => true],
+        ['id' => 2, 'nome' => 'Cartão de crédito',   'descricao' => 'Parcelamento em até 6x.',            'parcelas' => 6, 'ativo' => true],
+        ['id' => 3, 'nome' => 'Cartão de débito',    'descricao' => 'Débito na entrega ou na retirada.',  'parcelas' => 1, 'ativo' => true],
+        ['id' => 4, 'nome' => 'Boleto bancário',     'descricao' => 'Compensação em até 2 dias úteis.',   'parcelas' => 1, 'ativo' => true],
+        ['id' => 5, 'nome' => 'Dinheiro na entrega', 'descricao' => 'Pague ao receber os materiais.',     'parcelas' => 1, 'ativo' => false],
     ];
 }
 
 function carregarPagamentos(): array
 {
-    $linhas = db()->query('SELECT id, nome, descricao, desconto, parcelas, ativo FROM formas_pagamento ORDER BY id')->fetchAll();
+    $linhas = db()->query('SELECT id, nome, descricao, parcelas, ativo FROM formas_pagamento ORDER BY id')->fetchAll();
     return array_map(fn($p) => [
         'id'        => (int) $p['id'],
         'nome'      => (string) $p['nome'],
         'descricao' => (string) $p['descricao'],
-        'desconto'  => (float) $p['desconto'],
         'parcelas'  => max(1, (int) $p['parcelas']),
         'ativo'     => (bool) $p['ativo'],
     ], $linhas);
@@ -326,11 +325,11 @@ function salvarPagamento(int $id, array $item): bool
         $existe = (bool) $st->fetchColumn();
     }
     if ($existe) {
-        $pdo->prepare('UPDATE formas_pagamento SET nome = ?, descricao = ?, desconto = ?, parcelas = ?, ativo = ? WHERE id = ?')
-            ->execute([$item['nome'], $item['descricao'], $item['desconto'], $item['parcelas'], $item['ativo'] ? 1 : 0, $id]);
+        $pdo->prepare('UPDATE formas_pagamento SET nome = ?, descricao = ?, parcelas = ?, ativo = ? WHERE id = ?')
+            ->execute([$item['nome'], $item['descricao'], $item['parcelas'], $item['ativo'] ? 1 : 0, $id]);
     } else {
-        $pdo->prepare('INSERT INTO formas_pagamento (nome, descricao, desconto, parcelas, ativo) VALUES (?,?,?,?,?)')
-            ->execute([$item['nome'], $item['descricao'], $item['desconto'], $item['parcelas'], $item['ativo'] ? 1 : 0]);
+        $pdo->prepare('INSERT INTO formas_pagamento (nome, descricao, desconto, parcelas, ativo) VALUES (?,?,0,?,?)')
+            ->execute([$item['nome'], $item['descricao'], $item['parcelas'], $item['ativo'] ? 1 : 0]);
     }
     return $existe;
 }
@@ -421,7 +420,7 @@ function contarPedidosAbertos(int $usuarioId): int
  */
 function carregarPedidos(?int $usuarioId = null): array
 {
-    $sql = "SELECT p.id, p.status, p.total, p.desconto_pct, p.pagamento_id, p.pagamento_nome,
+    $sql = "SELECT p.id, p.status, p.total, p.pagamento_id, p.pagamento_nome,
                    DATE_FORMAT(p.criado_em, '%d/%m/%Y') AS data,
                    u.nome AS cliente_nome, u.email AS cliente_email,
                    i.produto_id AS item_produto, i.nome AS item_nome, i.qtd AS item_qtd, i.preco AS item_preco
@@ -443,7 +442,7 @@ function carregarPedidos(?int $usuarioId = null): array
                 'status'        => (int) $r['status'],
                 'total'         => (float) $r['total'],
                 'pagamento'     => $r['pagamento_nome'] !== null
-                    ? ['id' => (int) $r['pagamento_id'], 'nome' => $r['pagamento_nome'], 'desconto' => (float) $r['desconto_pct']]
+                    ? ['id' => (int) $r['pagamento_id'], 'nome' => $r['pagamento_nome']]
                     : null,
                 'cliente_nome'  => $r['cliente_nome'],
                 'cliente_email' => $r['cliente_email'],
@@ -520,10 +519,10 @@ function criarPedido(int $usuarioId, array $pagamento, array $carrinho): array
         }
 
         $agora = date('Y-m-d H:i:s');
-        $total = round($subtotal * (1 - $pagamento['desconto'] / 100), 2);
+        $total = round($subtotal, 2);
         $pdo->prepare('INSERT INTO pedidos (usuario_id, status, subtotal, desconto_pct, total, pagamento_id, pagamento_nome, criado_em, atualizado_em)
-                       VALUES (?,?,?,?,?,?,?,?,?)')
-            ->execute([$usuarioId, 0, round($subtotal, 2), $pagamento['desconto'], $total, $pagamento['id'], $pagamento['nome'], $agora, $agora]);
+                       VALUES (?,?,?,0,?,?,?,?,?)')
+            ->execute([$usuarioId, 0, round($subtotal, 2), $total, $pagamento['id'], $pagamento['nome'], $agora, $agora]);
         $numero = (int) $pdo->lastInsertId();
 
         $ins = $pdo->prepare('INSERT INTO pedido_itens (pedido_id, produto_id, nome, qtd, preco) VALUES (?,?,?,?,?)');
@@ -686,26 +685,4 @@ function encerrarReposicao(int $id, bool $receber): array
         $pdo->prepare("UPDATE reposicoes SET status = 'Recebida', recebida_em = ? WHERE id = ?")->execute([$agora, $id]);
         return ['ok', 'Mercadoria recebida: +' . $r['qtd'] . ' un. de "' . $r['produto_nome'] . '" no estoque.'];
     });
-}
-
-/* ==================================================================
- * Mensagens do formulário de contato
- * ================================================================== */
-function salvarMensagem(string $nome, string $email, string $telefone, string $assunto, string $texto): void
-{
-    db()->prepare('INSERT INTO mensagens (nome, email, telefone, assunto, mensagem, lida, criado_em) VALUES (?,?,?,?,?,0,?)')
-        ->execute([$nome, $email, $telefone, $assunto, $texto, date('Y-m-d H:i:s')]);
-}
-
-function listarMensagens(int $limite = 300): array
-{
-    $limite = max(1, min(1000, $limite));
-    return db()->query("SELECT id, nome, email, telefone, assunto, mensagem, lida,
-                               DATE_FORMAT(criado_em, '%d/%m/%Y %H:%i') AS data
-                        FROM mensagens ORDER BY id DESC LIMIT $limite")->fetchAll();
-}
-
-function marcarMensagensLidas(): void
-{
-    db()->exec('UPDATE mensagens SET lida = 1 WHERE lida = 0');
 }

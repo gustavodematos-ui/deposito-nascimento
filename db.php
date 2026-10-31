@@ -164,11 +164,11 @@ function semearBanco(): void
 
         // Formas de pagamento
         $pagamentos = lerJsonLegado('pagamentos.json') ?? pagamentosPadrao();
-        $ins = $pdo->prepare('INSERT INTO formas_pagamento (id, nome, descricao, desconto, parcelas, ativo) VALUES (?,?,?,?,?,?)');
+        $ins = $pdo->prepare('INSERT INTO formas_pagamento (id, nome, descricao, desconto, parcelas, ativo) VALUES (?,?,?,0,?,?)');
         foreach ($pagamentos as $p) {
             $ins->execute([
                 (int) $p['id'], (string) $p['nome'], (string) ($p['descricao'] ?? ''),
-                min(50, max(0, (float) ($p['desconto'] ?? 0))), min(12, max(1, (int) ($p['parcelas'] ?? 1))),
+                min(12, max(1, (int) ($p['parcelas'] ?? 1))),
                 (!array_key_exists('ativo', $p) || !empty($p['ativo'])) ? 1 : 0,
             ]);
         }
@@ -180,7 +180,7 @@ function semearBanco(): void
         $usuarios = lerJsonLegado('usuarios.json') ?? [];
         $insU = $pdo->prepare('INSERT INTO usuarios (nome, email, hash, criado_em) VALUES (?,?,?,?)');
         $insP = $pdo->prepare('INSERT INTO pedidos (id, usuario_id, status, subtotal, desconto_pct, total, pagamento_id, pagamento_nome, criado_em, atualizado_em)
-                               VALUES (?,?,?,?,?,?,?,?,?,?)');
+                               VALUES (?,?,?,?,0,?,?,?,?,?)');
         $insI = $pdo->prepare('INSERT INTO pedido_itens (pedido_id, produto_id, nome, qtd, preco) VALUES (?,?,?,?,?)');
 
         foreach ($usuarios as $email => $u) {
@@ -197,7 +197,6 @@ function semearBanco(): void
                 $quando = dataBrParaSql($ped['data'] ?? null);
                 $insP->execute([
                     (int) $ped['numero'], $uid, (int) $ped['status'], round($bruto, 2),
-                    $pag ? (float) $pag['desconto'] : 0,
                     round(isset($ped['total']) ? (float) $ped['total'] : $bruto, 2),
                     ($pag && isset($idsPagto[(int) $pag['id']])) ? (int) $pag['id'] : null,
                     $pag ? (string) $pag['nome'] : null,
@@ -233,15 +232,6 @@ function semearBanco(): void
                 $prev, in_array($r['status'], ['Solicitada', 'Recebida', 'Cancelada'], true) ? $r['status'] : 'Solicitada',
                 dataBrParaSql($r['data'] ?? null),
                 !empty($r['recebida_em']) ? dataBrParaSql($r['recebida_em']) : null,
-            ]);
-        }
-
-        // Mensagens do formulário de contato
-        $insG = $pdo->prepare('INSERT INTO mensagens (nome, email, telefone, assunto, mensagem, lida, criado_em) VALUES (?,?,?,?,?,1,?)');
-        foreach (array_reverse(lerJsonLegado('mensagens.json') ?? []) as $m) {
-            $insG->execute([
-                (string) $m['nome'], (string) $m['email'], (string) ($m['telefone'] ?? ''), (string) $m['assunto'],
-                (string) $m['mensagem'], dataBrParaSql($m['data'] ?? null),
             ]);
         }
 

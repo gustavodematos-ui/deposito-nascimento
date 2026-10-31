@@ -168,7 +168,6 @@ switch ($acao) {
         $idPg     = (int) ($_POST['id'] ?? 0);
         $nome     = trim((string) ($_POST['nome'] ?? ''));
         $desc     = trim((string) ($_POST['descricao'] ?? ''));
-        $descIn   = str_replace(',', '.', trim((string) ($_POST['desconto'] ?? '0')));
         $parcelas = filter_var($_POST['parcelas'] ?? 1, FILTER_VALIDATE_INT);
         $ativo    = !empty($_POST['ativo']);
 
@@ -176,13 +175,11 @@ switch ($acao) {
             aviso('erro', 'Informe o nome da forma de pagamento (2 a 40 caracteres).');
         } elseif (mb_strlen($desc) > 120) {
             aviso('erro', 'A descrição pode ter no máximo 120 caracteres.');
-        } elseif (!is_numeric($descIn) || $descIn < 0 || $descIn > 50) {
-            aviso('erro', 'O desconto deve estar entre 0% e 50%.');
         } elseif ($parcelas === false || $parcelas < 1 || $parcelas > 12) {
             aviso('erro', 'O número de parcelas deve estar entre 1 e 12.');
         } else {
             $achou = salvarPagamento($idPg, [
-                'nome' => $nome, 'descricao' => $desc, 'desconto' => round((float) $descIn, 2),
+                'nome' => $nome, 'descricao' => $desc,
                 'parcelas' => $parcelas, 'ativo' => $ativo,
             ]);
             aviso('ok', $achou ? 'Forma de pagamento atualizada.' : 'Forma de pagamento adicionada.');
