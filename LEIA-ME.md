@@ -43,6 +43,16 @@ O **Depósito Nascimento** é um sistema web responsivo de e-commerce e gestão 
  ┗ 🎨 stleys.css
 ```
 
+## 📄 Licença
+
+Este projeto está sob a licença GNU GPL v3.0.
+
+Você pode utilizar, modificar e distribuir este projeto livremente, desde que mantenha os créditos originais e utilize a mesma licença em versões derivadas.
+
+Para mais informações, acesse:
+
+https://www.gnu.org/licenses/gpl-3.0.html
+
 ### O que cada arquivo faz
 
 | Arquivo | Função |
